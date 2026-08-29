@@ -1,0 +1,2 @@
+Drop a gameplay GIF or screenshot here (e.g. preview.gif) and update the
+README image link to point at it.

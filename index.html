@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tricky Towers Clone</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="canvas"></canvas>
+
+  <div id="hud">
+    <div class="hud-cluster">
+      <div class="stat-pill">
+        <span class="label">Time</span>
+        <span class="value" id="stat-timer">00:00</span>
+      </div>
+      <div class="stat-pill">
+        <span class="label">Height</span>
+        <span class="value" id="stat-height">0 / 0</span>
+      </div>
+      <div class="stat-pill">
+        <span class="label">Blocks</span>
+        <span class="value" id="stat-pieces">0</span>
+      </div>
+    </div>
+
+    <div id="next-piece">
+      <span class="label" style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);">Next</span>
+      <div id="next-swatch"></div>
+    </div>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div id="screen-start" class="panel">
+      <h1>Tricky Towers</h1>
+      <p>Stack storm-tossed blocks as high as you can. Nothing snaps to a
+        grid — real physics means real wobble. Lean too far and it all
+        comes down.</p>
+      <div class="controls-hint">← → move &nbsp;·&nbsp; ↑ rotate CW &nbsp;·&nbsp; Z rotate CCW &nbsp;·&nbsp; ↓ drop</div>
+      <button id="btn-start" class="btn">Start Building</button>
+    </div>
+
+    <div id="screen-gameover" class="panel hidden">
+      <h2>Tower Collapsed</h2>
+      <p id="gameover-stats"></p>
+      <button id="btn-retry" class="btn">Try Again</button>
+    </div>
+
+    <div id="screen-win" class="panel hidden">
+      <h2>Tower Complete!</h2>
+      <p id="win-stats"></p>
+      <button id="btn-retry-win" class="btn">Build Again</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/blocks.js"></script>
+<script src="js/input.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

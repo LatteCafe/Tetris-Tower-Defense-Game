@@ -1,0 +1,203 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+:root {
+  --sky-top: #120a2e;
+  --sky-bottom: #35216f;
+  --panel-bg: rgba(18, 10, 46, 0.82);
+  --panel-border: rgba(255, 255, 255, 0.12);
+  --gold: #ffd166;
+  --teal: #4ecdc4;
+  --danger: #ef476f;
+  --text-main: #f4f0ff;
+  --text-dim: #b8adde;
+  --font-display: 'Fredoka', system-ui, sans-serif;
+  --font-body: 'Space Grotesk', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sky-top);
+  font-family: var(--font-body);
+  color: var(--text-main);
+}
+
+#game-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- HUD ---------- */
+
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 18px 22px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hud-cluster {
+  display: flex;
+  gap: 10px;
+}
+
+.stat-pill {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 8px 14px;
+  backdrop-filter: blur(6px);
+  min-width: 84px;
+  text-align: center;
+}
+
+.stat-pill .label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+.stat-pill .value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--text-main);
+}
+
+#next-piece {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  backdrop-filter: blur(6px);
+}
+
+#next-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--gold);
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.25), 0 0 10px rgba(255,255,255,0.25);
+}
+
+/* ---------- Overlay screens ---------- */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(18,10,46,0.35), rgba(9,5,26,0.75));
+  z-index: 20;
+  transition: opacity 0.25s ease;
+}
+
+.overlay.transparent {
+  background: transparent;
+  pointer-events: none;
+}
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 22px;
+  padding: 36px 40px;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 30px 60px rgba(0,0,0,0.45);
+  backdrop-filter: blur(10px);
+}
+
+.panel.hidden { display: none; }
+
+.panel h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 34px;
+  margin: 0 0 8px;
+  background: linear-gradient(135deg, var(--gold), #ff9f5a 60%, var(--danger));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.panel h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 26px;
+  margin: 0 0 8px;
+  color: var(--text-main);
+}
+
+.panel p {
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 18px;
+}
+
+.controls-hint {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--teal);
+  border: 1px dashed rgba(78, 205, 196, 0.4);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 20px;
+  letter-spacing: 0.02em;
+}
+
+.btn {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  color: #1a1240;
+  background: linear-gradient(135deg, var(--gold), #ffb347);
+  border: none;
+  border-radius: 12px;
+  padding: 12px 26px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(255, 209, 102, 0.35);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(255, 209, 102, 0.45);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 520px) {
+  .panel { padding: 26px 22px; max-width: 88vw; }
+  .panel h1 { font-size: 26px; }
+  .stat-pill { min-width: 64px; padding: 6px 10px; }
+}
