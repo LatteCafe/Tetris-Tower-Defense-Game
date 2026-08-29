@@ -10,10 +10,9 @@ wobble, lean, and can genuinely topple if you stack carelessly.
 ## Gameplay
 
 - Random tetromino-shaped pieces (I, O, T, S, Z, J, L) spawn one at a time and
-  fall under gravity.
+  fall under gravity (tuned to a slow ~3.5-4s drop so there's real time to react).
 - Move and rotate the **active** piece to place it on the growing stack.
-- Occasional **wind gusts** push every settled piece sideways — the storm
-  intensifies the longer you survive, just like the source game's magic storms.
+- Height is shown in metres, where one block = one metre.
 - **Win** by growing the tower past the gold goal line and keeping it standing.
 - **Lose** if any block tips off the platform or crashes to the ground below.
 
@@ -61,12 +60,12 @@ npx serve .
   rigid body per tetromino, so they rotate and collide as a single unit.
 - Rendering is a hand-rolled `<canvas>` renderer (not `Matter.Render`) so the
   art style (gem-toned blocks, stone pedestal, storm sky) is fully custom.
-- Wind is implemented as a slowly-drifting force applied to every dynamic
-  body each tick, ramping up with the number of pieces placed.
+- Gravity is tuned to `0.22` (Matter.js units) — enough to give a piece
+  roughly 3.5-4 seconds of hang time to fall the full play field height.
 
 ## Ideas for extending it
 
 - Add spell cards from the original game (haste, slow, boost blocks up).
+- Bring back optional wind gusts as a difficulty toggle.
 - Multiplayer via WebSockets, racing to the goal line.
-- Difficulty settings that change wind strength / goal height.
 - Local high-score leaderboard via `localStorage`.

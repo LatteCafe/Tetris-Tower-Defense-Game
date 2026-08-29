@@ -6,7 +6,8 @@ TT.Game = (function () {
   const blocks = TT.Blocks;
   const input = TT.Input;
 
-  const GOAL_HEIGHT = 620; // px above the platform surface needed to win
+  const METERS_PER_BLOCK = 1; // 1 block = 1 metre, for the on-screen height readout
+  const GOAL_HEIGHT_M = 18; // metres above the platform surface needed to win
   const WIN_HOLD_MS = 2200; // must stay above goal this long, standing, to win
   const LOCK_DELAY_MS = 350; // settle time before a piece is considered placed
   const MOVE_SPEED = 4.6;
@@ -19,10 +20,9 @@ TT.Game = (function () {
   let piecesPlaced = 0;
   let startTime = 0;
   let elapsed = 0;
-  let windTimer = 0;
-  let windTarget = 0;
-  let currentWind = 0;
   let goalY = 0;
+  let goalHeightPx = 0;
+  let pxPerMeter = 0;
   let maxHeightReached = 0;
   let stableTimer = 0;
   let lastFrameTime = 0;
@@ -32,13 +32,16 @@ TT.Game = (function () {
     resizeCanvas();
     window.addEventListener('resize', () => {
       resizeCanvas();
-      goalY = physics.platformY - GOAL_HEIGHT;
+      goalY = physics.platformY - goalHeightPx;
     });
 
     TT.Physics.init(canvas.width, canvas.height);
     physics = TT.Physics;
     TT.Render.init(canvas);
-    goalY = physics.platformY - GOAL_HEIGHT;
+
+    pxPerMeter = blocks.SIZE / METERS_PER_BLOCK;
+    goalHeightPx = GOAL_HEIGHT_M * pxPerMeter;
+    goalY = physics.platformY - goalHeightPx;
 
     Events.on(physics.engine, 'collisionStart', onCollision);
 
@@ -118,17 +121,6 @@ TT.Game = (function () {
     spawnPiece();
   }
 
-  function updateWind(delta) {
-    windTimer -= delta;
-    if (windTimer <= 0) {
-      const maxGust = 2 + Math.min(piecesPlaced * 0.15, 6);
-      windTarget = (Math.random() - 0.5) * 2 * maxGust;
-      windTimer = 3000 + Math.random() * 4000;
-    }
-    currentWind += (windTarget - currentWind) * 0.01;
-    physics.setWind(currentWind);
-  }
-
   function computeTowerTop() {
     let minY = physics.platformY;
     Composite.allBodies(physics.world).forEach((b) => {
@@ -153,7 +145,7 @@ TT.Game = (function () {
   function checkWin(delta) {
     const top = computeTowerTop();
     const height = physics.platformY - top;
-    if (height >= GOAL_HEIGHT) {
+    if (height >= goalHeightPx) {
       stableTimer += delta;
       if (stableTimer > WIN_HOLD_MS) return true;
     } else {
@@ -170,9 +162,6 @@ TT.Game = (function () {
     piecesPlaced = 0;
     maxHeightReached = 0;
     stableTimer = 0;
-    currentWind = 0;
-    windTimer = 0;
-    physics.setWind(0);
 
     nextType = blocks.randomType();
     spawnPiece();
@@ -191,26 +180,27 @@ TT.Game = (function () {
 
     if (state === 'playing') {
       handleInput();
-      updateWind(delta);
       physics.update(delta);
       checkLock(delta);
 
       elapsed = now - startTime;
       const top = computeTowerTop();
-      const height = Math.max(0, physics.platformY - top);
-      maxHeightReached = Math.max(maxHeightReached, height);
-      TT.UI.updateStats(elapsed, height, GOAL_HEIGHT, piecesPlaced);
+      const heightPx = Math.max(0, physics.platformY - top);
+      maxHeightReached = Math.max(maxHeightReached, heightPx);
+      const heightM = heightPx / pxPerMeter;
+      const goalM = goalHeightPx / pxPerMeter;
+      TT.UI.updateStats(elapsed, heightM, goalM, piecesPlaced);
 
       if (checkFail()) {
         state = 'gameover';
-        TT.UI.showGameOver(piecesPlaced, Math.round(maxHeightReached));
+        TT.UI.showGameOver(piecesPlaced, (maxHeightReached / pxPerMeter).toFixed(1));
       } else if (checkWin(delta)) {
         state = 'win';
         TT.UI.showWin(Math.round(elapsed / 1000), piecesPlaced);
       }
     }
 
-    TT.Render.frame(physics, canvas, { wind: currentWind, goalY, state });
+    TT.Render.frame(physics, canvas, { goalY, state });
     requestAnimationFrame(loop);
   }
 

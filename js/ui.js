@@ -28,9 +28,9 @@ TT.UI = (function () {
     return `${mm}:${ss}`;
   }
 
-  function updateStats(elapsedMs, height, goalHeight, pieces) {
+  function updateStats(elapsedMs, heightM, goalM, pieces) {
     elTimer.textContent = formatTime(elapsedMs);
-    elHeight.textContent = `${Math.round(height)} / ${goalHeight}`;
+    elHeight.textContent = `${heightM.toFixed(1)} / ${goalM.toFixed(0)} m`;
     elPieces.textContent = pieces;
   }
 
@@ -50,9 +50,9 @@ TT.UI = (function () {
     Object.values(screens).forEach((s) => s.classList.add('hidden'));
   }
 
-  function showGameOver(pieces, height) {
+  function showGameOver(pieces, heightM) {
     document.getElementById('gameover-stats').textContent =
-      `Placed ${pieces} block${pieces === 1 ? '' : 's'} · reached ${height}px before it came down.`;
+      `Placed ${pieces} block${pieces === 1 ? '' : 's'} · reached ${heightM}m before it came down.`;
     showScreen('gameover');
   }
 

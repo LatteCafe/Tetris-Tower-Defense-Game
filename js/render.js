@@ -35,24 +35,10 @@ TT.Render = (function () {
     height = canvas.height;
   }
 
-  function lerpColor(a, b, t) {
-    const ah = parseInt(a.slice(1), 16), bh = parseInt(b.slice(1), 16);
-    const ar = (ah >> 16) & 255, ag = (ah >> 8) & 255, ab = ah & 255;
-    const br = (bh >> 16) & 255, bg = (bh >> 8) & 255, bb = bh & 255;
-    const r = Math.round(ar + (br - ar) * t);
-    const g = Math.round(ag + (bg - ag) * t);
-    const bch = Math.round(ab + (bb - ab) * t);
-    return `rgb(${r},${g},${bch})`;
-  }
-
-  function drawBackground(windStrength) {
-    const stormT = Math.min(1, Math.abs(windStrength) / 6);
-    const topColor = lerpColor('#120a2e', '#1c0f3a', stormT);
-    const bottomColor = lerpColor('#35216f', '#4a1f5c', stormT);
-
+  function drawBackground() {
     const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, topColor);
-    grad.addColorStop(1, bottomColor);
+    grad.addColorStop(0, '#120a2e');
+    grad.addColorStop(1, '#35216f');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
@@ -68,13 +54,12 @@ TT.Render = (function () {
     });
     ctx.restore();
 
-    // Drifting storm clouds; speed reacts to wind.
+    // Slow, calm drifting clouds.
     ctx.save();
     ctx.globalAlpha = 0.35;
     clouds.forEach((c) => {
-      c.x += c.speed * (1 + Math.abs(windStrength) * 0.6) * Math.sign(windStrength || 1);
+      c.x += c.speed;
       if (c.x > width + 120) c.x = -120;
-      if (c.x < -120) c.x = width + 120;
       drawCloud(c.x, c.y, c.scale);
     });
     ctx.restore();
@@ -178,44 +163,18 @@ TT.Render = (function () {
     });
   }
 
-  function drawWindIndicator(wind) {
-    const strength = Math.min(1, Math.abs(wind) / 6);
-    if (strength < 0.05) return;
-
-    const dir = wind > 0 ? 1 : -1;
-    const x = width - 46;
-    const y = 100;
-
-    ctx.save();
-    ctx.globalAlpha = 0.55 + strength * 0.35;
-    ctx.strokeStyle = '#e9e4ff';
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 3; i++) {
-      const yy = y + i * 12 - 12;
-      const len = 18 + strength * 22;
-      ctx.beginPath();
-      ctx.moveTo(x - dir * len * 0.5, yy + Math.sin(frameCount * 0.2 + i) * 2);
-      ctx.lineTo(x + dir * len * 0.5, yy);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
   function frame(physics, canvasEl, opts) {
     if (canvasEl !== canvas) init(canvasEl);
     if (canvas.width !== width || canvas.height !== height) resize();
 
     frameCount++;
-    const wind = opts.wind || 0;
 
-    drawBackground(wind);
+    drawBackground();
     drawGoalLine(opts.goalY, physics.platformLeft, physics.platformRight);
     drawPlatform(physics);
 
     const bodies = Composite.allBodies(physics.world).filter((b) => b.label !== 'platform');
     bodies.forEach(drawBody);
-
-    drawWindIndicator(wind);
   }
 
   return { init, frame };
