@@ -24,6 +24,8 @@ TT.Blocks = (function () {
 
   // Builds one tetromino as a single Matter.js compound body (four fused
   // rectangles), so it falls, rotates and collides as one rigid piece.
+  // Rectangles tile flush (no gap) to avoid seam-related collision glitches;
+  // the grid look comes from stroke lines drawn in render.js instead.
   function createPiece(type, spawnX, spawnY) {
     const shape = SHAPES[type];
 
@@ -31,23 +33,23 @@ TT.Blocks = (function () {
       Bodies.rectangle(
         spawnX + cx * SIZE,
         spawnY + cy * SIZE,
-        SIZE - 2,
-        SIZE - 2,
+        SIZE,
+        SIZE,
         {
-          friction: 0.7,
-          frictionStatic: 1.4,
-          restitution: 0.02,
-          chamfer: { radius: 4 },
+          friction: 0.95,
+          frictionStatic: 6,
+          restitution: 0,
         }
       )
     );
 
     const body = Body.create({
       parts,
-      friction: 0.7,
-      frictionStatic: 1.4,
-      restitution: 0.02,
-      density: 0.0026,
+      friction: 0.95,
+      frictionStatic: 6,
+      restitution: 0,
+      density: 0.02, // noticeably heavier — resists being knocked around
+      isSleepingAllowed: true,
       label: 'piece-' + type,
     });
 

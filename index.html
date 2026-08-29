@@ -33,26 +33,16 @@
     </div>
   </div>
 
+  <div id="toast" class="toast hidden"></div>
+
   <div id="overlay" class="overlay">
     <div id="screen-start" class="panel">
       <h1>Tricky Towers</h1>
       <p>Stack storm-tossed blocks as high as you can. Nothing snaps to a
-        grid — real physics means real wobble. Lean too far and it all
-        comes down.</p>
-      <div class="controls-hint">← → move &nbsp;·&nbsp; ↑ rotate CW &nbsp;·&nbsp; Z rotate CCW &nbsp;·&nbsp; ↓ drop</div>
+        grid vertically — real physics means real wobble. Build endlessly
+        and chase each height milestone.</p>
+      <div class="controls-hint">← → move (half-block steps) &nbsp;·&nbsp; ↑ rotate CW 90° &nbsp;·&nbsp; Z rotate CCW 90° &nbsp;·&nbsp; ↓ drop</div>
       <button id="btn-start" class="btn">Start Building</button>
-    </div>
-
-    <div id="screen-gameover" class="panel hidden">
-      <h2>Tower Collapsed</h2>
-      <p id="gameover-stats"></p>
-      <button id="btn-retry" class="btn">Try Again</button>
-    </div>
-
-    <div id="screen-win" class="panel hidden">
-      <h2>Tower Complete!</h2>
-      <p id="win-stats"></p>
-      <button id="btn-retry-win" class="btn">Build Again</button>
     </div>
   </div>
 </div>

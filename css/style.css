@@ -135,6 +135,36 @@ html, body {
 
 .panel.hidden { display: none; }
 
+/* ---------- Milestone toast ---------- */
+
+.toast {
+  position: absolute;
+  top: 90px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  background: linear-gradient(135deg, var(--gold), #ffb347);
+  color: #1a1240;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(255, 209, 102, 0.4);
+  opacity: 0;
+  z-index: 15;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.toast.hidden {
+  display: none;
+}
+
 .panel h1 {
   font-family: var(--font-display);
   font-weight: 700;

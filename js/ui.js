@@ -1,9 +1,9 @@
-// ui.js — wires the HUD and overlay screens to the DOM.
+// ui.js — wires the HUD, start screen, and milestone toast to the DOM.
 window.TT = window.TT || {};
 
 TT.UI = (function () {
-  let elTimer, elHeight, elPieces, elNextSwatch, elOverlay;
-  let screens = {};
+  let elTimer, elHeight, elPieces, elNextSwatch, elOverlay, elStart, elToast;
+  let toastHideTimer = null;
 
   function init() {
     elTimer = document.getElementById('stat-timer');
@@ -11,14 +11,10 @@ TT.UI = (function () {
     elPieces = document.getElementById('stat-pieces');
     elNextSwatch = document.getElementById('next-swatch');
     elOverlay = document.getElementById('overlay');
-
-    screens.start = document.getElementById('screen-start');
-    screens.gameover = document.getElementById('screen-gameover');
-    screens.win = document.getElementById('screen-win');
+    elStart = document.getElementById('screen-start');
+    elToast = document.getElementById('toast');
 
     document.getElementById('btn-start').addEventListener('click', () => TT.Game.startGame());
-    document.getElementById('btn-retry').addEventListener('click', () => TT.Game.startGame());
-    document.getElementById('btn-retry-win').addEventListener('click', () => TT.Game.startGame());
   }
 
   function formatTime(ms) {
@@ -39,28 +35,24 @@ TT.UI = (function () {
     elNextSwatch.style.background = shape.color;
   }
 
-  function showScreen(name) {
-    elOverlay.classList.remove('transparent');
-    Object.values(screens).forEach((s) => s.classList.add('hidden'));
-    screens[name].classList.remove('hidden');
-  }
-
   function hideOverlays() {
     elOverlay.classList.add('transparent');
-    Object.values(screens).forEach((s) => s.classList.add('hidden'));
+    elStart.classList.add('hidden');
   }
 
-  function showGameOver(pieces, heightM) {
-    document.getElementById('gameover-stats').textContent =
-      `Placed ${pieces} block${pieces === 1 ? '' : 's'} · reached ${heightM}m before it came down.`;
-    showScreen('gameover');
+  // Endless mode has no win/lose screen — reaching a goal just pops a
+  // brief, non-blocking toast and play continues.
+  function showMilestone(text) {
+    elToast.textContent = text;
+    elToast.classList.remove('hidden');
+    elToast.classList.add('show');
+
+    if (toastHideTimer) clearTimeout(toastHideTimer);
+    toastHideTimer = setTimeout(() => {
+      elToast.classList.remove('show');
+      setTimeout(() => elToast.classList.add('hidden'), 300);
+    }, 2400);
   }
 
-  function showWin(seconds, pieces) {
-    document.getElementById('win-stats').textContent =
-      `Reached the goal in ${seconds}s using ${pieces} block${pieces === 1 ? '' : 's'}.`;
-    showScreen('win');
-  }
-
-  return { init, updateStats, updateNext, hideOverlays, showGameOver, showWin, showScreen };
+  return { init, updateStats, updateNext, hideOverlays, showMilestone };
 })();
