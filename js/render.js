@@ -163,6 +163,61 @@ TT.Render = (function () {
     });
   }
 
+  function drawGhost(piece, offsetY) {
+    if (offsetY <= 2) return; // already essentially touching down, no need to show it
+
+    const parts = piece.parts.length > 1 ? piece.parts.slice(1) : [piece];
+
+    // Combined bounding box of the landing footprint, for the wide glow bar.
+    let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
+    parts.forEach((part) => {
+      part.vertices.forEach((v) => {
+        minX = Math.min(minX, v.x);
+        maxX = Math.max(maxX, v.x);
+        maxY = Math.max(maxY, v.y + offsetY);
+      });
+    });
+
+    // Wide, soft "landing zone" glow beneath the footprint — the larger,
+    // easy-to-spot part of the indicator.
+    ctx.save();
+    const glowPad = 22;
+    const glow = ctx.createLinearGradient(0, maxY - 10, 0, maxY + 10);
+    glow.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    glow.addColorStop(0.5, 'rgba(255, 255, 255, 0.35)');
+    glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(minX - glowPad, maxY - 10, (maxX - minX) + glowPad * 2, 20);
+    ctx.restore();
+
+    // Ghost outline of the piece itself at its landing position.
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    parts.forEach((part) => {
+      const verts = part.vertices;
+      ctx.beginPath();
+      ctx.moveTo(verts[0].x, verts[0].y + offsetY);
+      for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i].x, verts[i].y + offsetY);
+      ctx.closePath();
+
+      ctx.fillStyle = hexToRgba(piece.ttColor, 0.22);
+      ctx.fill();
+
+      ctx.setLineDash([6, 5]);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = piece.ttColor;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+    ctx.restore();
+  }
+
+  function hexToRgba(hex, alpha) {
+    const h = parseInt(hex.slice(1), 16);
+    const r = (h >> 16) & 255, g = (h >> 8) & 255, b = h & 255;
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
   function frame(physics, canvasEl, opts) {
     if (canvasEl !== canvas) init(canvasEl);
     if (canvas.width !== width || canvas.height !== height) resize();
@@ -172,6 +227,8 @@ TT.Render = (function () {
     drawBackground();
     drawGoalLine(opts.goalY, physics.platformLeft, physics.platformRight);
     drawPlatform(physics);
+
+    if (opts.ghost) drawGhost(opts.ghost.piece, opts.ghost.offsetY);
 
     const bodies = Composite.allBodies(physics.world).filter((b) => b.label !== 'platform');
     bodies.forEach(drawBody);

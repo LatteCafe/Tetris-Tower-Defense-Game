@@ -49,7 +49,12 @@ TT.Blocks = (function () {
       frictionStatic: 6,
       restitution: 0,
       density: 0.02, // noticeably heavier — resists being knocked around
-      isSleepingAllowed: true,
+      // Sleeping is disabled while a piece is falling/under player control —
+      // with slow gravity, Matter's motion-bias sleep detector can treat a
+      // still-falling piece as "at rest" and freeze it mid-air. Locked
+      // pieces re-enable sleep in lockPiece() so the settled stack still
+      // goes fully still.
+      isSleepingAllowed: false,
       label: 'piece-' + type,
     });
 

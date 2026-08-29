@@ -21,6 +21,9 @@ wobble, lean, and can genuinely topple if you stack carelessly.
   and play continues — there's no game-over screen. Reaching a height
   milestone pops a quick banner and raises the bar further, so the climb
   never really ends.
+- A landing indicator shows exactly where the active piece will come to
+  rest if you stop moving it — a ghost outline plus a wider glowing zone
+  under the footprint.
 
 ## Controls
 
@@ -71,9 +74,23 @@ npx serve .
 - Horizontal movement is position-snapped (`Body.translate`) rather than
   velocity-driven, which avoids the classic Matter.js "compound bodies
   fight the solver" jitter when a piece is pressed against a neighbor.
-- Pieces sleep (`engine.enableSleeping`) once fully settled, and are
-  explicitly zeroed out on lock, so the stack stays visually still instead
-  of endlessly micro-vibrating.
+- Moves and 90° rotations are rejected outright if they'd create an
+  overlap (an AABB check against every other body, exact here since all
+  pieces stay axis-aligned) — this is what actually stops pieces from
+  launching each other, since the physics solver only violently resolves
+  overlaps that already exist.
+- Pieces disable sleeping while falling/under player control — with slow
+  gravity, Matter's motion-bias sleep detector can otherwise mistake a
+  still-falling piece for "at rest" and freeze it mid-air. Sleep is
+  re-enabled the moment a piece locks, which is what keeps the settled
+  stack fully still (planted) instead of drifting.
+- The spawn point rises to stay clear of the tower's current height, so a
+  tall stack never causes a new piece to spawn already overlapping it.
+- A velocity clamp runs every tick as a safety net against any residual
+  solver spike, independent of the above.
+- The landing indicator projects each cell of the active piece straight
+  down against the nearest surface below it (again using axis-aligned
+  bounds, exact for this game) to find where it will land.
 
 ## Ideas for extending it
 
