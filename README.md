@@ -92,6 +92,12 @@ npx serve .
   per frame, so a fast-moving piece next to a tall column can't travel far
   enough in a single step to visibly tunnel/clip into it before collision
   detection catches it.
+- Rotating an asymmetric piece (T, S, Z, J, L, I) spins it around its
+  center of mass, which isn't on a grid line for those shapes — left
+  uncorrected, this drifts the piece a few pixels off the block grid every
+  rotation. Every rotate snaps the piece back onto the grid afterward
+  (falling back to the pre-rotation state if that snap would overlap
+  something), so pieces always line up flush against a level stack.
 - The landing indicator projects each cell of the active piece straight
   down against the nearest surface below it (again using axis-aligned
   bounds, exact for this game) to find where it will land.

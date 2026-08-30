@@ -146,11 +146,40 @@ TT.Game = (function () {
   function tryRotate(dir) {
     if (!activePiece) return;
     const delta = dir * (Math.PI / 2);
+    const originalAngle = activePiece.angle;
+    const originalX = activePiece.position.x;
+
     Body.rotate(activePiece, delta);
+
+    // Rotating an asymmetric piece (T, S, Z, J, L, I) spins it around its
+    // center of mass, which for these shapes doesn't sit on a grid line —
+    // so the piece can drift a few pixels off the block grid every time
+    // it's rotated, and never quite line up flush with a level stack.
+    // Snap it back onto the nearest valid grid line afterward.
+    snapToGrid(activePiece);
+
     if (wouldOverlap(activePiece)) {
-      Body.rotate(activePiece, -delta);
+      Body.setAngle(activePiece, originalAngle);
+      Body.setPosition(activePiece, { x: originalX, y: activePiece.position.y });
     } else {
       Body.setAngularVelocity(activePiece, 0);
+    }
+  }
+
+  // Shifts the piece sideways by the smallest amount needed to put its
+  // leftmost edge back on a multiple of half a block from the fixed spawn
+  // origin — the same lattice horizontal movement already snaps to.
+  function snapToGrid(piece) {
+    const parts = piece.parts.length > 1 ? piece.parts.slice(1) : [piece];
+    let minX = Infinity;
+    parts.forEach((part) => { minX = Math.min(minX, part.bounds.min.x); });
+
+    const gridOriginX = canvas.width / 2 - blocks.SIZE - blocks.SIZE / 2;
+    const rawOffset = ((minX - gridOriginX) % halfStep + halfStep) % halfStep;
+    const correction = rawOffset > halfStep / 2 ? rawOffset - halfStep : rawOffset;
+
+    if (Math.abs(correction) > 0.25) {
+      Body.translate(piece, { x: -correction, y: 0 });
     }
   }
 
