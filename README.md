@@ -98,6 +98,15 @@ npx serve .
   rotation. Every rotate snaps the piece back onto the grid afterward
   (falling back to the pre-rotation state if that snap would overlap
   something), so pieces always line up flush against a level stack.
+- While a piece is falling/under player control, its rotational inertia
+  is set to infinite, so physics contact (landing off-center, a glancing
+  touch against a neighbor) can never spin it — only the deliberate 90°
+  rotate key can. Normal inertia is restored the moment it locks, so the
+  settled stack can still be physically knocked over by a later piece,
+  which is the actual point of the physics.
+- On top of the above, every piece is also snapped to the nearest 90°
+  angle and back onto the grid at the instant it locks, as a defensive
+  fallback in case any residual drift ever slips through.
 - The landing indicator projects each cell of the active piece straight
   down against the nearest surface below it (again using axis-aligned
   bounds, exact for this game) to find where it will land.

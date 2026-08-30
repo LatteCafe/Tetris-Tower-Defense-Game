@@ -255,6 +255,27 @@ TT.Game = (function () {
   }
 
   function lockPiece() {
+    // A piece can naturally tip/drift a little while settling under
+    // physics — not just from a deliberate rotate — and locking it as-is
+    // leaves a permanent small gap or tilt against its neighbors. Snap it
+    // to the nearest 90° angle and back onto the grid at the moment it
+    // locks, so every placed piece ends up perfectly flush no matter how
+    // it wobbled on the way down.
+    const originalAngle = activePiece.angle;
+    const originalX = activePiece.position.x;
+    const originalY = activePiece.position.y;
+
+    const nearestAngle = Math.round(activePiece.angle / (Math.PI / 2)) * (Math.PI / 2);
+    Body.rotate(activePiece, nearestAngle - activePiece.angle);
+    snapToGrid(activePiece);
+
+    if (wouldOverlap(activePiece)) {
+      // Extremely rare — the correction itself would overlap something.
+      // Fall back to the physically-settled (imperfect but valid) state.
+      Body.setAngle(activePiece, originalAngle);
+      Body.setPosition(activePiece, { x: originalX, y: originalY });
+    }
+
     // "Plant" the piece firmly — kill any residual micro-velocity so it
     // reads as solidly placed rather than softly settling forever, and
     // now that it's no longer under player control, let it sleep once
@@ -262,6 +283,11 @@ TT.Game = (function () {
     Body.setVelocity(activePiece, { x: 0, y: 0 });
     Body.setAngularVelocity(activePiece, 0);
     activePiece.isSleepingAllowed = true;
+
+    // Restore normal rotational physics now that it's no longer the
+    // controlled piece — the settled stack should still be knockable/
+    // toppleable if a later piece hits it.
+    Body.setInertia(activePiece, activePiece.ttOriginalInertia);
 
     activePiece = null;
     piecesPlaced++;

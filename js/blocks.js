@@ -63,6 +63,21 @@ TT.Blocks = (function () {
     body.ttLanded = false;
     body.ttSettleTimer = 0;
 
+    // Capture the naturally-computed inertia before freezing it below —
+    // this is restored once the piece locks, so the settled stack can
+    // still be physically knocked over/toppled later.
+    body.ttOriginalInertia = body.inertia;
+
+    // While a piece is falling and under player control, it should only
+    // ever rotate in the exact 90° snaps triggered by the rotate key —
+    // never from physics (a glancing contact imparting torque, tipping
+    // as it lands off-center, etc.). Infinite inertia makes the body
+    // immune to angular impulses entirely while still responding normally
+    // to linear ones, so it can be pushed/land/collide but never spin on
+    // its own. Manual rotation (Body.rotate) is kinematic and unaffected
+    // by this. Restored to normal in lockPiece().
+    Body.setInertia(body, Infinity);
+
     return body;
   }
 
