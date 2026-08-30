@@ -15,7 +15,7 @@ TT.Game = (function () {
   const MOVE_REPEAT_DELAY_MS = 220; // hold time before auto-repeat kicks in
   const MOVE_REPEAT_RATE_MS = 90; // time between repeated steps while held
 
-  const MAX_LINEAR_SPEED = 14; // safety clamp: nothing should ever move faster than this
+  const MAX_LINEAR_SPEED = 26; // safety clamp: must stay above SOFT_DROP_SPEED or the clamp itself causes tunneling
   const MAX_ANGULAR_SPEED = 0.3; // safety clamp for spin
   const SOFT_DROP_SPEED = 22; // was 8 — noticeably faster fall while holding down
 

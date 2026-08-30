@@ -88,6 +88,10 @@ npx serve .
   tall stack never causes a new piece to spawn already overlapping it.
 - A velocity clamp runs every tick as a safety net against any residual
   solver spike, independent of the above.
+- Physics runs in small sub-steps (max 8ms each) rather than one big step
+  per frame, so a fast-moving piece next to a tall column can't travel far
+  enough in a single step to visibly tunnel/clip into it before collision
+  detection catches it.
 - The landing indicator projects each cell of the active piece straight
   down against the nearest surface below it (again using axis-aligned
   bounds, exact for this game) to find where it will land.

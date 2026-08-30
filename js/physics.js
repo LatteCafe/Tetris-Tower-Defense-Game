@@ -48,7 +48,22 @@ TT.Physics = (function () {
   }
 
   function update(delta) {
-    Engine.update(engine, delta);
+    // Sub-step the simulation instead of one big Engine.update call. A
+    // fast-moving piece (soft drop, or a quick sideways step right next
+    // to a tall column) can otherwise travel far enough in a single step
+    // to tunnel partway through a neighbor before collision detection
+    // catches it — this is what causes visible clipping. Smaller steps
+    // keep each frame's displacement small relative to a block's size.
+    const MAX_SUBSTEP_MS = 8;
+    const MAX_SUBSTEPS = 8;
+    let remaining = delta;
+    let steps = 0;
+    while (remaining > 0.01 && steps < MAX_SUBSTEPS) {
+      const step = Math.min(MAX_SUBSTEP_MS, remaining);
+      Engine.update(engine, step);
+      remaining -= step;
+      steps++;
+    }
   }
 
   return {
