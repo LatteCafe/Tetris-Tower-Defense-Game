@@ -17,6 +17,7 @@ TT.Game = (function () {
 
   const MAX_LINEAR_SPEED = 14; // safety clamp: nothing should ever move faster than this
   const MAX_ANGULAR_SPEED = 0.3; // safety clamp for spin
+  const SOFT_DROP_SPEED = 22; // was 8 — noticeably faster fall while holding down
 
   let canvas, physics;
   let state = 'ready'; // ready | playing
@@ -73,7 +74,14 @@ TT.Game = (function () {
     evt.pairs.forEach((p) => {
       [p.bodyA, p.bodyB].forEach((b) => {
         const parent = b.parent && b.parent !== b ? b.parent : b;
-        if (parent === activePiece) activePiece.ttLanded = true;
+        if (parent === activePiece && !activePiece.ttLanded) {
+          activePiece.ttLanded = true;
+          // Kill downward velocity the instant contact is made — otherwise
+          // a fast soft-drop impact can overshoot into the surface for a
+          // frame or two before the solver corrects it, which reads as a
+          // bounce even with restitution set to 0.
+          Body.setVelocity(activePiece, { x: activePiece.velocity.x, y: 0 });
+        }
       });
     });
   }
@@ -181,7 +189,7 @@ TT.Game = (function () {
     if (input.isDown('ArrowDown') && !activePiece.ttLanded) {
       Body.setVelocity(activePiece, {
         x: activePiece.velocity.x,
-        y: Math.max(activePiece.velocity.y, 8),
+        y: Math.max(activePiece.velocity.y, SOFT_DROP_SPEED),
       });
     }
   }
