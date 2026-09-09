@@ -1,7 +1,7 @@
 {
-  "name": "tricky-towers-clone",
+  "name": "tetris-clone",
   "version": "1.0.0",
-  "description": "A physics-based tower-stacking game inspired by Tricky Towers, built with Matter.js.",
+  "description": "A classic, grid-based Tetris clone. No physics engine — pure integer grid logic.",
   "main": "index.html",
   "scripts": {
     "start": "serve .",
@@ -10,19 +10,10 @@
   "keywords": [
     "game",
     "tetris",
-    "tricky-towers",
-    "matter.js",
-    "physics",
     "canvas"
   ],
   "license": "MIT",
   "devDependencies": {
     "serve": "^14.2.1"
-  },
-  "author": "",
-  "dependencies": {
-    "canvas": "^3.2.3",
-    "jsdom": "^30.0.1",
-    "matter-js": "^0.20.0"
   }
 }

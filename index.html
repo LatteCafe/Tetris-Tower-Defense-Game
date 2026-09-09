@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Tricky Towers Clone</title>
+<title>Tetris Clone</title>
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -18,12 +18,16 @@
         <span class="value" id="stat-timer">00:00</span>
       </div>
       <div class="stat-pill">
-        <span class="label">Height</span>
-        <span class="value" id="stat-height">0 / 0</span>
+        <span class="label">Score</span>
+        <span class="value" id="stat-score">0</span>
       </div>
       <div class="stat-pill">
-        <span class="label">Blocks</span>
-        <span class="value" id="stat-pieces">0</span>
+        <span class="label">Lines</span>
+        <span class="value" id="stat-lines">0</span>
+      </div>
+      <div class="stat-pill">
+        <span class="label">Level</span>
+        <span class="value" id="stat-level">1</span>
       </div>
     </div>
 
@@ -37,19 +41,24 @@
 
   <div id="overlay" class="overlay">
     <div id="screen-start" class="panel">
-      <h1>Tricky Towers</h1>
-      <p>Stack storm-tossed blocks as high as you can. Nothing snaps to a
-        grid vertically — real physics means real wobble. Build endlessly
-        and chase each height milestone.</p>
-      <div class="controls-hint">← → move (half-block steps) &nbsp;·&nbsp; ↑ rotate CW 90° &nbsp;·&nbsp; Z rotate CCW 90° &nbsp;·&nbsp; ↓ drop</div>
-      <button id="btn-start" class="btn">Start Building</button>
+      <h1>Tetris</h1>
+      <p>Classic grid-based Tetris — clear lines to score, speed picks up
+        every level. You start with a random pile already at the bottom,
+        so it's not a clean slate.</p>
+      <div class="controls-hint">← → move &nbsp;·&nbsp; ↑ rotate CW &nbsp;·&nbsp; Z rotate CCW &nbsp;·&nbsp; ↓ soft drop &nbsp;·&nbsp; Space hard drop</div>
+      <button id="btn-start" class="btn">Start Game</button>
+    </div>
+
+    <div id="screen-gameover" class="panel hidden">
+      <h2>Game Over</h2>
+      <p id="gameover-stats"></p>
+      <button id="btn-retry" class="btn">Try Again</button>
     </div>
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-<script src="js/physics.js"></script>
-<script src="js/blocks.js"></script>
+<script src="js/pieces.js"></script>
+<script src="js/board.js"></script>
 <script src="js/input.js"></script>
 <script src="js/render.js"></script>
 <script src="js/ui.js"></script>

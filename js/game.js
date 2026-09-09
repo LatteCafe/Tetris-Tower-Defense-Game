@@ -1,64 +1,52 @@
-// game.js — the main game state machine and update loop.
+// game.js — the main game state machine and update loop. Pure grid
+// logic throughout; no physics engine, no floating point positions.
 window.TT = window.TT || {};
 
 TT.Game = (function () {
-  const { Body, Composite, Events, Vector } = Matter;
-  const blocks = TT.Blocks;
+  const board = TT.Board;
+  const pieces = TT.Pieces;
   const input = TT.Input;
 
-  const METERS_PER_BLOCK = 1; // 1 block = 1 metre, for the on-screen height readout
-  const GOAL_HEIGHT_M = 18; // first milestone height, in metres
-  const GOAL_STEP_M = 8; // once reached, the next goal is this much higher — endless climb
-  const MILESTONE_HOLD_MS = 2200; // must stand above the goal this long to bank it
-  const LOCK_DELAY_MS = 350; // settle time before a piece is considered placed
+  const START_GARBAGE_ROWS = 5; // random pre-filled rows at the bottom on a fresh game
+  const LOCK_DELAY_MS = 500; // grace period once grounded before a piece locks
+  const MAX_LOCK_RESETS = 12; // caps how long a piece can be "wiggled" to avoid locking forever
+  const DAS_MS = 170; // delay before a held move starts auto-repeating
+  const ARR_MS = 50; // time between auto-repeated moves while held
+  const SOFT_DROP_INTERVAL_MS = 35; // effective drop speed while holding down
+  const BASE_DROP_INTERVAL_MS = 800; // level 1 gravity speed
+  const MIN_DROP_INTERVAL_MS = 90; // fastest gravity ever gets
+  const LINES_PER_LEVEL = 10;
 
-  const MOVE_REPEAT_DELAY_MS = 220; // hold time before auto-repeat kicks in
-  const MOVE_REPEAT_RATE_MS = 90; // time between repeated steps while held
-
-  const MAX_LINEAR_SPEED = 26; // safety clamp: must stay above SOFT_DROP_SPEED or the clamp itself causes tunneling
-  const MAX_ANGULAR_SPEED = 0.3; // safety clamp for spin
-  const SOFT_DROP_SPEED = 22; // was 8 — noticeably faster fall while holding down
-
-  let canvas, physics;
-  let state = 'ready'; // ready | playing
-  let activePiece = null;
-  let nextType = null;
-  let piecesPlaced = 0;
+  let canvas;
+  let state = 'ready'; // ready | playing | gameover
+  let bag = [];
+  let nextQueue = [];
+  let current = null; // { type, rotation, row, col }
+  let dropTimer = 0;
+  let lockTimer = 0;
+  let lockResets = 0;
+  let grounded = false;
+  let score = 0;
+  let lines = 0;
+  let level = 1;
   let startTime = 0;
   let elapsed = 0;
-  let goalY = 0;
-  let goalHeightPx = 0;
-  let pxPerMeter = 0;
-  let halfStep = 0;
-  let maxHeightReached = 0;
-  let stableTimer = 0;
   let lastFrameTime = 0;
-  let ghostOffsetY = 0;
-
   let moveHoldDir = 0;
   let moveRepeatTimer = 0;
+  let clearFlashRows = []; // rows to briefly flash before removal (visual only)
+  let clearFlashTimer = 0;
 
   function init(canvasEl) {
     canvas = canvasEl;
     resizeCanvas();
-    window.addEventListener('resize', () => {
-      resizeCanvas();
-      goalY = physics.platformY - goalHeightPx;
-    });
+    window.addEventListener('resize', resizeCanvas);
 
-    TT.Physics.init(canvas.width, canvas.height);
-    physics = TT.Physics;
+    board.init();
     TT.Render.init(canvas);
 
-    pxPerMeter = blocks.SIZE / METERS_PER_BLOCK;
-    halfStep = blocks.SIZE / 2;
-    goalHeightPx = GOAL_HEIGHT_M * pxPerMeter;
-    goalY = physics.platformY - goalHeightPx;
-
-    Events.on(physics.engine, 'collisionStart', onCollision);
-
-    nextType = blocks.randomType();
-    TT.UI.updateNext(nextType);
+    refillQueueIfNeeded();
+    TT.UI.updateNext(nextQueue[0]);
 
     requestAnimationFrame(loop);
   }
@@ -69,323 +57,208 @@ TT.Game = (function () {
     canvas.height = parent.clientHeight;
   }
 
-  function onCollision(evt) {
-    if (!activePiece) return;
-    evt.pairs.forEach((p) => {
-      [p.bodyA, p.bodyB].forEach((b) => {
-        const parent = b.parent && b.parent !== b ? b.parent : b;
-        if (parent === activePiece && !activePiece.ttLanded) {
-          activePiece.ttLanded = true;
-          // Kill downward velocity the instant contact is made — otherwise
-          // a fast soft-drop impact can overshoot into the surface for a
-          // frame or two before the solver corrects it, which reads as a
-          // bounce even with restitution set to 0.
-          Body.setVelocity(activePiece, { x: activePiece.velocity.x, y: 0 });
-        }
-      });
-    });
+  function refillQueueIfNeeded() {
+    while (nextQueue.length < 3) {
+      if (bag.length === 0) bag = pieces.createBag();
+      nextQueue.push(bag.shift());
+    }
   }
 
   function spawnPiece() {
-    const type = nextType;
-    nextType = blocks.randomType();
+    refillQueueIfNeeded();
+    const type = nextQueue.shift();
+    refillQueueIfNeeded();
+    TT.UI.updateNext(nextQueue[0]);
 
-    // Spawn point rises with the tower so a tall stack never causes a new
-    // piece to spawn already overlapping it (which the physics solver
-    // would otherwise resolve with a violent shove).
-    const towerTop = computeTowerTop();
-    const spawnY = Math.min(50, towerTop - 140);
-    const spawnX = canvas.width / 2 - blocks.SIZE;
+    const startCol = Math.floor(board.COLS / 2) - 2;
+    const spawn = { type, rotation: 0, row: -2, col: startCol };
 
-    activePiece = blocks.createPiece(type, spawnX, spawnY);
-    Composite.add(physics.world, activePiece);
+    if (!board.isValidPosition(pieces.cellsFor(type, 0), spawn.row, spawn.col)) {
+      current = spawn;
+      gameOver();
+      return;
+    }
 
-    TT.UI.updateNext(nextType);
+    current = spawn;
+    grounded = false;
+    lockTimer = 0;
+    lockResets = 0;
   }
 
-  // --- Overlap-safe movement & rotation -------------------------------
-  // All pieces stay axis-aligned (rotation is always a multiple of 90°),
-  // so a simple AABB overlap test on each part is exact, not approximate.
-  // Moves/rotates that would overlap another body are rejected outright —
-  // this is what actually stops the "launch" bug, since the physics
-  // solver only ever violently ejects bodies to resolve overlaps *we*
-  // created; if we never create one, there's nothing to resolve.
-
-  function aabbOverlap(a, b, eps) {
-    return (
-      a.min.x < b.max.x - eps &&
-      a.max.x > b.min.x + eps &&
-      a.min.y < b.max.y - eps &&
-      a.max.y > b.min.y + eps
-    );
+  function isGrounded(piece) {
+    const cells = pieces.cellsFor(piece.type, piece.rotation);
+    return !board.isValidPosition(cells, piece.row + 1, piece.col);
   }
 
-  function wouldOverlap(piece) {
-    const obstacles = Composite.allBodies(physics.world).filter((b) => b !== piece);
-    const parts = piece.parts.length > 1 ? piece.parts.slice(1) : [piece];
-    for (const part of parts) {
-      for (const ob of obstacles) {
-        if (aabbOverlap(part.bounds, ob.bounds, 0.6)) return true;
+  function tryMove(dCol) {
+    if (!current) return false;
+    const cells = pieces.cellsFor(current.type, current.rotation);
+    const newCol = current.col + dCol;
+    if (!board.isValidPosition(cells, current.row, newCol)) return false;
+    current.col = newCol;
+    onSuccessfulAction();
+    return true;
+  }
+
+  function tryRotate(dir) {
+    if (!current) return false;
+    const newRotation = current.rotation + dir;
+    const cells = pieces.cellsFor(current.type, newRotation);
+
+    // Simple wall-kick attempts: straight rotation first, then nudge
+    // left/right/up by a cell or two to fit rotations near walls or the
+    // floor. Not full SRS, but robust and always grid-exact.
+    const kicks = [
+      { dr: 0, dc: 0 }, { dr: 0, dc: -1 }, { dr: 0, dc: 1 },
+      { dr: 0, dc: -2 }, { dr: 0, dc: 2 }, { dr: -1, dc: 0 },
+    ];
+
+    for (const k of kicks) {
+      const row = current.row + k.dr;
+      const col = current.col + k.dc;
+      if (board.isValidPosition(cells, row, col)) {
+        current.rotation = newRotation;
+        current.row = row;
+        current.col = col;
+        onSuccessfulAction();
+        return true;
       }
     }
     return false;
   }
 
-  // Instantly nudges the active piece sideways by half a block width — a
-  // single position snap, rejected if it would overlap anything.
-  function tryStepMove(dir) {
-    if (!activePiece) return;
-    Body.translate(activePiece, { x: dir * halfStep, y: 0 });
-    if (wouldOverlap(activePiece)) {
-      Body.translate(activePiece, { x: -dir * halfStep, y: 0 });
-    } else {
-      Body.setVelocity(activePiece, { x: 0, y: activePiece.velocity.y });
+  // A successful move/rotate while grounded gives the classic "wiggle
+  // room" lock-delay reset, capped so a piece can't be stalled forever.
+  function onSuccessfulAction() {
+    if (grounded && lockResets < MAX_LOCK_RESETS) {
+      lockTimer = 0;
+      lockResets++;
     }
   }
 
-  function tryRotate(dir) {
-    if (!activePiece) return;
-    const delta = dir * (Math.PI / 2);
-    const originalAngle = activePiece.angle;
-    const originalX = activePiece.position.x;
-
-    Body.rotate(activePiece, delta);
-
-    // Rotating an asymmetric piece (T, S, Z, J, L, I) spins it around its
-    // center of mass, which for these shapes doesn't sit on a grid line —
-    // so the piece can drift a few pixels off the block grid every time
-    // it's rotated, and never quite line up flush with a level stack.
-    // Snap it back onto the nearest valid grid line afterward.
-    snapToGrid(activePiece);
-
-    if (wouldOverlap(activePiece)) {
-      Body.setAngle(activePiece, originalAngle);
-      Body.setPosition(activePiece, { x: originalX, y: activePiece.position.y });
-    } else {
-      Body.setAngularVelocity(activePiece, 0);
+  function softDropStep() {
+    if (!current) return;
+    const cells = pieces.cellsFor(current.type, current.rotation);
+    if (board.isValidPosition(cells, current.row + 1, current.col)) {
+      current.row++;
+      score += 1;
     }
   }
 
-  // Shifts the piece sideways by the smallest amount needed to put its
-  // leftmost edge back on a multiple of half a block from the fixed spawn
-  // origin — the same lattice horizontal movement already snaps to.
-  function snapToGrid(piece) {
-    const parts = piece.parts.length > 1 ? piece.parts.slice(1) : [piece];
-    let minX = Infinity;
-    parts.forEach((part) => { minX = Math.min(minX, part.bounds.min.x); });
-
-    const gridOriginX = canvas.width / 2 - blocks.SIZE - blocks.SIZE / 2;
-    const rawOffset = ((minX - gridOriginX) % halfStep + halfStep) % halfStep;
-    const correction = rawOffset > halfStep / 2 ? rawOffset - halfStep : rawOffset;
-
-    if (Math.abs(correction) > 0.25) {
-      Body.translate(piece, { x: -correction, y: 0 });
+  function hardDrop() {
+    if (!current) return;
+    const cells = pieces.cellsFor(current.type, current.rotation);
+    let dropped = 0;
+    while (board.isValidPosition(cells, current.row + 1, current.col)) {
+      current.row++;
+      dropped++;
     }
+    score += dropped * 2;
+    lockPiece();
+  }
+
+  function lockPiece() {
+    const cells = pieces.cellsFor(current.type, current.rotation);
+    const color = pieces.colorFor(current.type);
+    board.lockCells(cells, current.row, current.col, color);
+
+    const cleared = board.clearFullRows();
+    if (cleared > 0) {
+      applyScoreForClear(cleared);
+      lines += cleared;
+      const newLevel = Math.floor(lines / LINES_PER_LEVEL) + 1;
+      if (newLevel !== level) {
+        level = newLevel;
+        TT.UI.showMilestone(`Level ${level}!`);
+      }
+      TT.Render.flashClear();
+    }
+
+    current = null;
+    spawnPiece();
+  }
+
+  function applyScoreForClear(cleared) {
+    const table = { 1: 100, 2: 300, 3: 500, 4: 800 };
+    score += (table[cleared] || 0) * level;
+  }
+
+  function currentDropInterval() {
+    const interval = BASE_DROP_INTERVAL_MS - (level - 1) * 60;
+    return Math.max(MIN_DROP_INTERVAL_MS, interval);
   }
 
   function handleInput(delta) {
-    if (!activePiece) return;
+    if (!current) return;
 
-    // Grid-snap horizontal movement, half a block per step, with a short
-    // hold-to-repeat (classic DAS-style feel) rather than free sliding.
     const left = input.isDown('ArrowLeft');
     const right = input.isDown('ArrowRight');
     const dir = left && !right ? -1 : right && !left ? 1 : 0;
 
     if (dir !== 0) {
       if (dir !== moveHoldDir) {
-        tryStepMove(dir);
+        tryMove(dir);
         moveHoldDir = dir;
-        moveRepeatTimer = MOVE_REPEAT_DELAY_MS;
+        moveRepeatTimer = DAS_MS;
       } else {
         moveRepeatTimer -= delta;
         if (moveRepeatTimer <= 0) {
-          tryStepMove(dir);
-          moveRepeatTimer = MOVE_REPEAT_RATE_MS;
+          tryMove(dir);
+          moveRepeatTimer = ARR_MS;
         }
       }
     } else {
       moveHoldDir = 0;
     }
 
-    // Discrete 90-degree rotation, one snap per key press.
     if (input.consumePressed('ArrowUp')) tryRotate(1);
     if (input.consumePressed('KeyZ')) tryRotate(-1);
+    if (input.consumePressed('Space')) hardDrop();
+  }
 
-    // Soft drop only while still airborne — forcing extra fall speed once
-    // the piece has already touched the stack is exactly the kind of
-    // "fight the solver every frame" pattern that causes launches.
-    if (input.isDown('ArrowDown') && !activePiece.ttLanded) {
-      Body.setVelocity(activePiece, {
-        x: activePiece.velocity.x,
-        y: Math.max(activePiece.velocity.y, SOFT_DROP_SPEED),
-      });
+  function updateGravity(delta) {
+    if (!current) return;
+
+    grounded = isGrounded(current);
+
+    if (grounded) {
+      lockTimer += delta;
+      if (lockTimer >= LOCK_DELAY_MS) {
+        lockPiece();
+      }
+      return;
+    }
+
+    const interval = input.isDown('ArrowDown') ? SOFT_DROP_INTERVAL_MS : currentDropInterval();
+    dropTimer += delta;
+    while (dropTimer >= interval && current && !grounded) {
+      dropTimer -= interval;
+      current.row++;
+      if (input.isDown('ArrowDown')) score += 1;
+      grounded = isGrounded(current);
     }
   }
 
-  // Safety net: even with overlap-checked input, a stack of many bodies
-  // settling at once could in principle produce a brief solver spike.
-  // Clamping every body's speed each tick makes that visually a non-event
-  // instead of a launch.
-  function clampVelocities() {
-    Composite.allBodies(physics.world).forEach((b) => {
-      if (b.isStatic) return;
-      const speed = Vector.magnitude(b.velocity);
-      if (speed > MAX_LINEAR_SPEED) {
-        const scale = MAX_LINEAR_SPEED / speed;
-        Body.setVelocity(b, { x: b.velocity.x * scale, y: b.velocity.y * scale });
-      }
-      if (Math.abs(b.angularVelocity) > MAX_ANGULAR_SPEED) {
-        Body.setAngularVelocity(b, Math.sign(b.angularVelocity) * MAX_ANGULAR_SPEED);
-      }
-    });
-  }
-
-  function checkLock(delta) {
-    if (!activePiece) return;
-    const speed = Vector.magnitude(activePiece.velocity);
-    const angSpeed = Math.abs(activePiece.angularVelocity);
-
-    if (activePiece.ttLanded && speed < 0.4 && angSpeed < 0.02) {
-      activePiece.ttSettleTimer += delta;
-      if (activePiece.ttSettleTimer > LOCK_DELAY_MS) lockPiece();
-    } else {
-      activePiece.ttSettleTimer = 0;
-    }
-  }
-
-  function lockPiece() {
-    // A piece can naturally tip/drift a little while settling under
-    // physics — not just from a deliberate rotate — and locking it as-is
-    // leaves a permanent small gap or tilt against its neighbors. Snap it
-    // to the nearest 90° angle and back onto the grid at the moment it
-    // locks, so every placed piece ends up perfectly flush no matter how
-    // it wobbled on the way down.
-    const originalAngle = activePiece.angle;
-    const originalX = activePiece.position.x;
-    const originalY = activePiece.position.y;
-
-    const nearestAngle = Math.round(activePiece.angle / (Math.PI / 2)) * (Math.PI / 2);
-    Body.rotate(activePiece, nearestAngle - activePiece.angle);
-    snapToGrid(activePiece);
-
-    if (wouldOverlap(activePiece)) {
-      // Extremely rare — the correction itself would overlap something.
-      // Fall back to the physically-settled (imperfect but valid) state.
-      Body.setAngle(activePiece, originalAngle);
-      Body.setPosition(activePiece, { x: originalX, y: originalY });
-    }
-
-    // "Plant" the piece firmly — kill any residual micro-velocity so it
-    // reads as solidly placed rather than softly settling forever, and
-    // now that it's no longer under player control, let it sleep once
-    // still (this is what keeps the settled stack from drifting).
-    Body.setVelocity(activePiece, { x: 0, y: 0 });
-    Body.setAngularVelocity(activePiece, 0);
-    activePiece.isSleepingAllowed = true;
-
-    // Restore normal rotational physics now that it's no longer the
-    // controlled piece — the settled stack should still be knockable/
-    // toppleable if a later piece hits it.
-    Body.setInertia(activePiece, activePiece.ttOriginalInertia);
-
-    activePiece = null;
-    piecesPlaced++;
-    spawnPiece();
-  }
-
-  function computeTowerTop() {
-    let minY = physics.platformY;
-    Composite.allBodies(physics.world).forEach((b) => {
-      if (b.label === 'platform') return;
-      b.vertices.forEach((v) => {
-        if (v.y < minY) minY = v.y;
-      });
-    });
-    return minY;
-  }
-
-  // --- Landing indicator ------------------------------------------------
-  // For each cell (part) of the active piece, find the nearest obstruction
-  // directly below it (another body or the platform) using their axis-
-  // aligned bounds — exact, since every piece stays grid-aligned. The
-  // smallest clearance across all cells is how far the piece can still
-  // fall before it touches down.
-  function computeGhostOffset() {
-    if (!activePiece) return 0;
-    const obstacles = Composite.allBodies(physics.world).filter((b) => b !== activePiece);
-    const parts = activePiece.parts.length > 1 ? activePiece.parts.slice(1) : [activePiece];
-
-    let minDrop = physics.deathY;
-    parts.forEach((part) => {
-      const pMinX = part.bounds.min.x;
-      const pMaxX = part.bounds.max.x;
-      const pBottom = part.bounds.max.y;
-      let floorY = physics.deathY;
-
-      obstacles.forEach((ob) => {
-        const overlapsX = ob.bounds.max.x > pMinX + 1 && ob.bounds.min.x < pMaxX - 1;
-        if (!overlapsX) return;
-        if (ob.bounds.min.y >= pBottom - 0.5 && ob.bounds.min.y < floorY) {
-          floorY = ob.bounds.min.y;
-        }
-      });
-
-      const drop = floorY - pBottom;
-      if (drop < minDrop) minDrop = drop;
-    });
-
-    return Math.max(0, minDrop);
-  }
-
-  // Endless mode: a piece that falls off the platform is simply removed —
-  // it never ends the game. If it was the piece under player control, the
-  // next one spawns immediately.
-  function cleanupFallenBlocks() {
-    const bodies = Composite.allBodies(physics.world).filter((b) => b.label !== 'platform');
-    bodies.forEach((b) => {
-      if (b.position.y > physics.deathY) {
-        const wasActive = b === activePiece;
-        Composite.remove(physics.world, b);
-        if (wasActive) {
-          activePiece = null;
-          spawnPiece();
-        }
-      }
-    });
-  }
-
-  // Reaching the current goal line banks a milestone and raises the bar —
-  // this never stops play, it just keeps the climb going indefinitely.
-  function checkMilestone(delta) {
-    const top = computeTowerTop();
-    const height = physics.platformY - top;
-    if (height >= goalHeightPx) {
-      stableTimer += delta;
-      if (stableTimer > MILESTONE_HOLD_MS) {
-        const reachedM = Math.round(goalHeightPx / pxPerMeter);
-        TT.UI.showMilestone(`${reachedM}m reached!`);
-        goalHeightPx += GOAL_STEP_M * pxPerMeter;
-        goalY = physics.platformY - goalHeightPx;
-        stableTimer = 0;
-      }
-    } else {
-      stableTimer = 0;
-    }
+  function gameOver() {
+    state = 'gameover';
+    TT.UI.showGameOver(score, lines, level);
   }
 
   function reset() {
-    const bodies = Composite.allBodies(physics.world).filter((b) => b.label !== 'platform');
-    Composite.remove(physics.world, bodies);
+    board.init();
+    board.fillRandomStart(START_GARBAGE_ROWS);
 
-    activePiece = null;
-    piecesPlaced = 0;
-    maxHeightReached = 0;
-    stableTimer = 0;
-    goalHeightPx = GOAL_HEIGHT_M * pxPerMeter;
-    goalY = physics.platformY - goalHeightPx;
+    bag = [];
+    nextQueue = [];
+    current = null;
+    dropTimer = 0;
+    lockTimer = 0;
+    lockResets = 0;
+    grounded = false;
+    score = 0;
+    lines = 0;
+    level = 1;
 
-    nextType = blocks.randomType();
     spawnPiece();
   }
 
@@ -402,27 +275,15 @@ TT.Game = (function () {
 
     if (state === 'playing') {
       handleInput(delta);
-      physics.update(delta);
-      clampVelocities();
-      checkLock(delta);
-      cleanupFallenBlocks();
-      ghostOffsetY = computeGhostOffset();
+      updateGravity(delta);
 
       elapsed = now - startTime;
-      const top = computeTowerTop();
-      const heightPx = Math.max(0, physics.platformY - top);
-      maxHeightReached = Math.max(maxHeightReached, heightPx);
-      const heightM = heightPx / pxPerMeter;
-      const goalM = goalHeightPx / pxPerMeter;
-      TT.UI.updateStats(elapsed, heightM, goalM, piecesPlaced);
-
-      checkMilestone(delta);
+      TT.UI.updateStats(elapsed, score, lines, level);
     }
 
-    TT.Render.frame(physics, canvas, {
-      goalY,
+    TT.Render.frame({
+      current,
       state,
-      ghost: activePiece ? { piece: activePiece, offsetY: ghostOffsetY } : null,
     });
     requestAnimationFrame(loop);
   }

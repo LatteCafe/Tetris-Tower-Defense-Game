@@ -1,38 +1,47 @@
-// render.js — hand-rolled canvas renderer (not Matter.Render) so the art
-// style stays fully custom: storm sky, stone pedestal, gem-toned blocks.
+// render.js — hand-rolled canvas renderer for the grid-based board.
 window.TT = window.TT || {};
 
 TT.Render = (function () {
-  const { Composite } = Matter;
+  const board = TT.Board;
+  const pieces = TT.Pieces;
 
   let canvas, ctx, width, height;
   let stars = [];
-  let clouds = [];
   let frameCount = 0;
+  let flashAlpha = 0;
+
+  // Layout, recomputed on init/resize.
+  let cellSize = 24;
+  let boardPxW = 0;
+  let boardPxH = 0;
+  let offsetX = 0;
+  let offsetY = 0;
 
   function init(c) {
     canvas = c;
     ctx = canvas.getContext('2d');
     resize();
 
-    stars = Array.from({ length: 90 }, () => ({
+    stars = Array.from({ length: 70 }, () => ({
       x: Math.random() * width,
-      y: Math.random() * height * 0.55,
-      r: Math.random() * 1.5 + 0.4,
+      y: Math.random() * height,
+      r: Math.random() * 1.4 + 0.4,
       phase: Math.random() * Math.PI * 2,
-    }));
-
-    clouds = Array.from({ length: 6 }, () => ({
-      x: Math.random() * width,
-      y: 30 + Math.random() * 130,
-      scale: 0.5 + Math.random() * 0.9,
-      speed: 0.12 + Math.random() * 0.22,
     }));
   }
 
   function resize() {
     width = canvas.width;
     height = canvas.height;
+
+    const maxCellW = (width * 0.62) / board.COLS;
+    const maxCellH = (height * 0.86) / board.ROWS;
+    cellSize = Math.floor(Math.min(maxCellW, maxCellH));
+
+    boardPxW = cellSize * board.COLS;
+    boardPxH = cellSize * board.ROWS;
+    offsetX = (width - boardPxW) / 2;
+    offsetY = (height - boardPxH) / 2 + height * 0.03;
   }
 
   function drawBackground() {
@@ -42,7 +51,6 @@ TT.Render = (function () {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
-    // Stars twinkle gently.
     ctx.save();
     stars.forEach((s) => {
       const tw = 0.5 + 0.5 * Math.sin(frameCount * 0.03 + s.phase);
@@ -53,186 +61,143 @@ TT.Render = (function () {
       ctx.fill();
     });
     ctx.restore();
-
-    // Slow, calm drifting clouds.
-    ctx.save();
-    ctx.globalAlpha = 0.35;
-    clouds.forEach((c) => {
-      c.x += c.speed;
-      if (c.x > width + 120) c.x = -120;
-      drawCloud(c.x, c.y, c.scale);
-    });
-    ctx.restore();
   }
 
-  function drawCloud(x, y, s) {
-    ctx.fillStyle = '#e9e4ff';
-    ctx.beginPath();
-    ctx.ellipse(x, y, 40 * s, 16 * s, 0, 0, Math.PI * 2);
-    ctx.ellipse(x + 26 * s, y + 4 * s, 26 * s, 13 * s, 0, 0, Math.PI * 2);
-    ctx.ellipse(x - 26 * s, y + 4 * s, 24 * s, 12 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  function drawPlatform(physics) {
-    const { platformY, platformLeft, platformRight } = physics;
-    const w = platformRight - platformLeft;
-    const cx = (platformLeft + platformRight) / 2;
-
-    // Pedestal shadow.
+  function drawBoardFrame() {
+    // Outer panel behind the playfield.
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(cx, height - 8, w * 0.7, 14, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Stone pedestal body.
-    const stoneGrad = ctx.createLinearGradient(0, platformY, 0, height);
-    stoneGrad.addColorStop(0, '#6b6478');
-    stoneGrad.addColorStop(1, '#302a3d');
-    ctx.fillStyle = stoneGrad;
-    ctx.fillRect(platformLeft, platformY, w, height - platformY);
-
-    // Top surface highlight.
-    ctx.fillStyle = '#8b84a0';
-    ctx.fillRect(platformLeft, platformY, w, 10);
-
-    // Vertical fluting lines for a carved-column look.
-    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillStyle = 'rgba(18, 10, 46, 0.55)';
+    ctx.fillRect(offsetX - 10, offsetY - 10, boardPxW + 20, boardPxH + 20);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
     ctx.lineWidth = 2;
-    for (let x = platformLeft + 14; x < platformRight; x += 18) {
+    ctx.strokeRect(offsetX - 10, offsetY - 10, boardPxW + 20, boardPxH + 20);
+    ctx.restore();
+
+    // Faint grid lines.
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.lineWidth = 1;
+    for (let c = 0; c <= board.COLS; c++) {
+      const x = offsetX + c * cellSize;
       ctx.beginPath();
-      ctx.moveTo(x, platformY + 12);
-      ctx.lineTo(x, height);
+      ctx.moveTo(x, offsetY);
+      ctx.lineTo(x, offsetY + boardPxH);
       ctx.stroke();
     }
-
-    // Edge markers so the drop-off zone reads clearly.
-    ctx.fillStyle = '#ffd166';
-    ctx.fillRect(platformLeft - 3, platformY, 3, 10);
-    ctx.fillRect(platformRight, platformY, 3, 10);
-  }
-
-  function drawGoalLine(goalY, platformLeft, platformRight) {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255, 209, 102, 0.75)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 8]);
-    ctx.beginPath();
-    ctx.moveTo(0, goalY);
-    ctx.lineTo(width, goalY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.fillStyle = 'rgba(255, 209, 102, 0.9)';
-    ctx.font = '600 11px "Space Grotesk", sans-serif';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText('GOAL', 12, goalY - 4);
+    for (let r = 0; r <= board.ROWS; r++) {
+      const y = offsetY + r * cellSize;
+      ctx.beginPath();
+      ctx.moveTo(offsetX, y);
+      ctx.lineTo(offsetX + boardPxW, y);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
-  function drawBody(body) {
-    const parts = body.parts.length > 1 ? body.parts.slice(1) : [body];
-    parts.forEach((part) => {
-      const verts = part.vertices;
-      ctx.beginPath();
-      ctx.moveTo(verts[0].x, verts[0].y);
-      for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i].x, verts[i].y);
-      ctx.closePath();
+  function cellRect(r, c) {
+    return {
+      x: offsetX + c * cellSize,
+      y: offsetY + r * cellSize,
+      w: cellSize,
+      h: cellSize,
+    };
+  }
 
-      ctx.fillStyle = body.ttColor || '#cccccc';
-      ctx.fill();
+  function drawCell(r, c, color, alpha) {
+    if (r < 0) return; // above the visible board (spawn area) — don't draw
+    const { x, y, w, h } = cellRect(r, c);
+    const pad = 1.5;
 
-      // Gloss highlight along the top edge for a candy/gem look.
+    ctx.save();
+    ctx.globalAlpha = alpha !== undefined ? alpha : 1;
+    ctx.fillStyle = color;
+    ctx.fillRect(x + pad, y + pad, w - pad * 2, h - pad * 2);
+
+    // Gloss highlight along the top edge.
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.fillRect(x + pad, y + pad, w - pad * 2, Math.max(2, h * 0.22));
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + pad, y + pad, w - pad * 2, h - pad * 2);
+    ctx.restore();
+  }
+
+  function drawLockedGrid() {
+    for (let r = 0; r < board.ROWS; r++) {
+      for (let c = 0; c < board.COLS; c++) {
+        const color = board.cellAt(r, c);
+        if (color) drawCell(r, c, color, 1);
+      }
+    }
+  }
+
+  function computeGhostRow(piece) {
+    const cells = pieces.cellsFor(piece.type, piece.rotation);
+    let row = piece.row;
+    while (board.isValidPosition(cells, row + 1, piece.col)) row++;
+    return row;
+  }
+
+  function drawGhost(piece) {
+    const ghostRow = computeGhostRow(piece);
+    if (ghostRow === piece.row) return; // already touching down, skip
+    const cells = pieces.cellsFor(piece.type, piece.rotation);
+    const color = pieces.colorFor(piece.type);
+
+    cells.forEach((cell) => {
+      const r = ghostRow + cell.r;
+      const c = piece.col + cell.c;
+      if (r < 0) return;
+      const { x, y, w, h } = cellRect(r, c);
+      const pad = 2;
       ctx.save();
-      ctx.clip();
-      ctx.fillStyle = 'rgba(255,255,255,0.22)';
-      ctx.beginPath();
-      ctx.moveTo(verts[0].x, verts[0].y);
-      ctx.lineTo(verts[1].x, verts[1].y);
-      ctx.lineTo(verts[1].x, verts[1].y + 8);
-      ctx.lineTo(verts[0].x, verts[0].y + 8);
-      ctx.closePath();
-      ctx.fill();
+      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.8;
+      ctx.strokeRect(x + pad, y + pad, w - pad * 2, h - pad * 2);
       ctx.restore();
-
-      ctx.strokeStyle = 'rgba(0,0,0,0.28)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
     });
   }
 
-  function drawGhost(piece, offsetY) {
-    if (offsetY <= 2) return; // already essentially touching down, no need to show it
-
-    const parts = piece.parts.length > 1 ? piece.parts.slice(1) : [piece];
-
-    // Combined bounding box of the landing footprint, for the wide glow bar.
-    let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
-    parts.forEach((part) => {
-      part.vertices.forEach((v) => {
-        minX = Math.min(minX, v.x);
-        maxX = Math.max(maxX, v.x);
-        maxY = Math.max(maxY, v.y + offsetY);
-      });
+  function drawActivePiece(piece) {
+    const cells = pieces.cellsFor(piece.type, piece.rotation);
+    const color = pieces.colorFor(piece.type);
+    cells.forEach((cell) => {
+      drawCell(piece.row + cell.r, piece.col + cell.c, color, 1);
     });
+  }
 
-    // Wide, soft "landing zone" glow beneath the footprint — the larger,
-    // easy-to-spot part of the indicator.
+  function flashClear() {
+    flashAlpha = 0.5;
+  }
+
+  function drawFlash() {
+    if (flashAlpha <= 0.01) return;
     ctx.save();
-    const glowPad = 22;
-    const glow = ctx.createLinearGradient(0, maxY - 10, 0, maxY + 10);
-    glow.addColorStop(0, 'rgba(255, 255, 255, 0)');
-    glow.addColorStop(0.5, 'rgba(255, 255, 255, 0.35)');
-    glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(minX - glowPad, maxY - 10, (maxX - minX) + glowPad * 2, 20);
+    ctx.globalAlpha = flashAlpha;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(offsetX, offsetY, boardPxW, boardPxH);
     ctx.restore();
-
-    // Ghost outline of the piece itself at its landing position.
-    ctx.save();
-    ctx.globalAlpha = 0.85;
-    parts.forEach((part) => {
-      const verts = part.vertices;
-      ctx.beginPath();
-      ctx.moveTo(verts[0].x, verts[0].y + offsetY);
-      for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i].x, verts[i].y + offsetY);
-      ctx.closePath();
-
-      ctx.fillStyle = hexToRgba(piece.ttColor, 0.22);
-      ctx.fill();
-
-      ctx.setLineDash([6, 5]);
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = piece.ttColor;
-      ctx.stroke();
-      ctx.setLineDash([]);
-    });
-    ctx.restore();
+    flashAlpha *= 0.85;
   }
 
-  function hexToRgba(hex, alpha) {
-    const h = parseInt(hex.slice(1), 16);
-    const r = (h >> 16) & 255, g = (h >> 8) & 255, b = h & 255;
-    return `rgba(${r},${g},${b},${alpha})`;
-  }
-
-  function frame(physics, canvasEl, opts) {
-    if (canvasEl !== canvas) init(canvasEl);
+  function frame(opts) {
     if (canvas.width !== width || canvas.height !== height) resize();
-
     frameCount++;
 
     drawBackground();
-    drawGoalLine(opts.goalY, physics.platformLeft, physics.platformRight);
-    drawPlatform(physics);
+    drawBoardFrame();
+    drawLockedGrid();
 
-    if (opts.ghost) drawGhost(opts.ghost.piece, opts.ghost.offsetY);
+    if (opts.current) {
+      drawGhost(opts.current);
+      drawActivePiece(opts.current);
+    }
 
-    const bodies = Composite.allBodies(physics.world).filter((b) => b.label !== 'platform');
-    bodies.forEach(drawBody);
+    drawFlash();
   }
 
-  return { init, frame };
+  return { init, frame, flashClear };
 })();

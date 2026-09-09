@@ -1,20 +1,23 @@
-// ui.js — wires the HUD, start screen, and milestone toast to the DOM.
+// ui.js — wires the HUD, start/game-over screens, and toast to the DOM.
 window.TT = window.TT || {};
 
 TT.UI = (function () {
-  let elTimer, elHeight, elPieces, elNextSwatch, elOverlay, elStart, elToast;
+  let elTimer, elScore, elLines, elLevel, elNextSwatch, elOverlay, elStart, elGameOver, elToast;
   let toastHideTimer = null;
 
   function init() {
     elTimer = document.getElementById('stat-timer');
-    elHeight = document.getElementById('stat-height');
-    elPieces = document.getElementById('stat-pieces');
+    elScore = document.getElementById('stat-score');
+    elLines = document.getElementById('stat-lines');
+    elLevel = document.getElementById('stat-level');
     elNextSwatch = document.getElementById('next-swatch');
     elOverlay = document.getElementById('overlay');
     elStart = document.getElementById('screen-start');
+    elGameOver = document.getElementById('screen-gameover');
     elToast = document.getElementById('toast');
 
     document.getElementById('btn-start').addEventListener('click', () => TT.Game.startGame());
+    document.getElementById('btn-retry').addEventListener('click', () => TT.Game.startGame());
   }
 
   function formatTime(ms) {
@@ -24,24 +27,37 @@ TT.UI = (function () {
     return `${mm}:${ss}`;
   }
 
-  function updateStats(elapsedMs, heightM, goalM, pieces) {
+  function updateStats(elapsedMs, score, lines, level) {
     elTimer.textContent = formatTime(elapsedMs);
-    elHeight.textContent = `${heightM.toFixed(1)} / ${goalM.toFixed(0)} m`;
-    elPieces.textContent = pieces;
+    elScore.textContent = score;
+    elLines.textContent = lines;
+    elLevel.textContent = level;
   }
 
   function updateNext(type) {
-    const shape = TT.Blocks.SHAPES[type];
-    elNextSwatch.style.background = shape.color;
+    if (!type) return;
+    elNextSwatch.style.background = TT.Pieces.colorFor(type);
   }
 
   function hideOverlays() {
     elOverlay.classList.add('transparent');
     elStart.classList.add('hidden');
+    elGameOver.classList.add('hidden');
   }
 
-  // Endless mode has no win/lose screen — reaching a goal just pops a
-  // brief, non-blocking toast and play continues.
+  function showScreen(name) {
+    elOverlay.classList.remove('transparent');
+    elStart.classList.add('hidden');
+    elGameOver.classList.add('hidden');
+    (name === 'start' ? elStart : elGameOver).classList.remove('hidden');
+  }
+
+  function showGameOver(score, lines, level) {
+    document.getElementById('gameover-stats').textContent =
+      `Score ${score} · ${lines} line${lines === 1 ? '' : 's'} · level ${level}`;
+    showScreen('gameover');
+  }
+
   function showMilestone(text) {
     elToast.textContent = text;
     elToast.classList.remove('hidden');
@@ -51,8 +67,8 @@ TT.UI = (function () {
     toastHideTimer = setTimeout(() => {
       elToast.classList.remove('show');
       setTimeout(() => elToast.classList.add('hidden'), 300);
-    }, 2400);
+    }, 2000);
   }
 
-  return { init, updateStats, updateNext, hideOverlays, showMilestone };
+  return { init, updateStats, updateNext, hideOverlays, showGameOver, showMilestone };
 })();

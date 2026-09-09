@@ -1,38 +1,31 @@
-# Tricky Towers Clone
+# Tetris Clone
 
-A browser-based, physics-driven tower-stacking game inspired by *Tricky Towers*.
-Unlike classic Tetris, blocks are **not grid-locked** — every piece is a real
-rigid body simulated with [Matter.js](https://brm.io/matter-js/), so towers
-wobble, lean, and can genuinely topple if you stack carelessly.
-
-![gameplay preview](assets/preview-placeholder.txt)
+A classic, grid-based Tetris — no physics engine, no floating point
+positions. Every piece lives on an exact integer grid, so collision,
+rotation, and stacking are always precise: no drift, no clipping, no
+misalignment.
 
 ## Gameplay
 
-- Random tetromino-shaped pieces (I, O, T, S, Z, J, L) spawn one at a time and
-  fall under gravity (tuned to a slow ~10s drop so there's real time to line
-  up a placement).
-- Move the **active** piece left/right in half-block grid-snap steps (hold
-  to auto-repeat) and rotate it a full 90° per key press.
-- Pieces have real weight and high friction — once placed, they plant
-  firmly and don't slide around.
-- Height is shown in metres, where one block = one metre.
-- This is **endless**: a piece that falls off the platform is just removed
-  and play continues — there's no game-over screen. Reaching a height
-  milestone pops a quick banner and raises the bar further, so the climb
-  never really ends.
-- A landing indicator shows exactly where the active piece will come to
-  rest if you stop moving it — a ghost outline plus a wider glowing zone
-  under the footprint.
+- Standard 10×20 board, 7 tetromino types dealt via a "7-bag" randomizer
+  (each piece appears exactly once before the bag reshuffles, so you never
+  get long unlucky droughts of one shape).
+- The game starts with a random pile already filling the bottom 5 rows —
+  it's not a clean slate. Every generated row always has at least one gap,
+  so nothing starts unclearable.
+- Clear full rows to score. Speed increases every level (every 10 lines).
+- Game overs when a new piece can't spawn because the stack has reached
+  the top.
 
 ## Controls
 
 | Key | Action |
 | --- | --- |
-| `←` / `→` | Move the active piece half a block left / right (hold to repeat) |
-| `↑` | Rotate 90° clockwise |
-| `Z` | Rotate 90° counter-clockwise |
-| `↓` | Soft drop (fall faster) |
+| `←` / `→` | Move left / right (hold to auto-repeat) |
+| `↑` | Rotate clockwise |
+| `Z` | Rotate counter-clockwise |
+| `↓` | Soft drop |
+| `Space` | Hard drop |
 
 ## Project structure
 
@@ -40,22 +33,21 @@ wobble, lean, and can genuinely topple if you stack carelessly.
 tricky-towers/
 ├── index.html          # Entry point, canvas + HUD markup
 ├── css/
-│   └── style.css        # Visual design (storm-sky theme)
+│   └── style.css        # Visual theme
 ├── js/
-│   ├── physics.js       # Matter.js engine setup, platform, wind forces
-│   ├── blocks.js        # Tetromino definitions + compound-body spawning
-│   ├── input.js          # Keyboard state tracking
-│   ├── render.js         # Canvas rendering (sky, platform, pieces, HUD fx)
-│   ├── ui.js              # DOM overlay / HUD wiring
-│   └── main.js            # Bootstraps everything on load
-├── assets/
+│   ├── pieces.js         # Tetromino shapes, all 4 rotation states each, 7-bag
+│   ├── board.js           # Grid state, collision checks, line clearing
+│   ├── input.js            # Keyboard state tracking
+│   ├── render.js            # Canvas rendering (board, pieces, ghost piece)
+│   ├── ui.js                 # DOM overlay / HUD wiring
+│   └── main.js                 # Bootstraps everything on load
 ├── package.json
 └── README.md
 ```
 
 ## Running it
 
-No build step needed — it's plain HTML/CSS/JS plus the Matter.js CDN build.
+No build step, no dependencies — plain HTML/CSS/JS.
 
 ```bash
 npx serve .
@@ -64,56 +56,27 @@ npx serve .
 
 ## Tech notes
 
-- Physics: [Matter.js](https://brm.io/matter-js/) (loaded from CDN in `index.html`).
-- Pieces are Matter.js **compound bodies** — four rectangles fused into one
-  rigid body per tetromino, so they rotate and collide as a single unit.
-- Rendering is a hand-rolled `<canvas>` renderer (not `Matter.Render`) so the
-  art style (gem-toned blocks, stone pedestal, storm sky) is fully custom.
-- Gravity is tuned to `0.055` (Matter.js units) — roughly a 10-second fall
-  across the full play field height.
-- Horizontal movement is position-snapped (`Body.translate`) rather than
-  velocity-driven, which avoids the classic Matter.js "compound bodies
-  fight the solver" jitter when a piece is pressed against a neighbor.
-- Moves and 90° rotations are rejected outright if they'd create an
-  overlap (an AABB check against every other body, exact here since all
-  pieces stay axis-aligned) — this is what actually stops pieces from
-  launching each other, since the physics solver only violently resolves
-  overlaps that already exist.
-- Pieces disable sleeping while falling/under player control — with slow
-  gravity, Matter's motion-bias sleep detector can otherwise mistake a
-  still-falling piece for "at rest" and freeze it mid-air. Sleep is
-  re-enabled the moment a piece locks, which is what keeps the settled
-  stack fully still (planted) instead of drifting.
-- The spawn point rises to stay clear of the tower's current height, so a
-  tall stack never causes a new piece to spawn already overlapping it.
-- A velocity clamp runs every tick as a safety net against any residual
-  solver spike, independent of the above.
-- Physics runs in small sub-steps (max 8ms each) rather than one big step
-  per frame, so a fast-moving piece next to a tall column can't travel far
-  enough in a single step to visibly tunnel/clip into it before collision
-  detection catches it.
-- Rotating an asymmetric piece (T, S, Z, J, L, I) spins it around its
-  center of mass, which isn't on a grid line for those shapes — left
-  uncorrected, this drifts the piece a few pixels off the block grid every
-  rotation. Every rotate snaps the piece back onto the grid afterward
-  (falling back to the pre-rotation state if that snap would overlap
-  something), so pieces always line up flush against a level stack.
-- While a piece is falling/under player control, its rotational inertia
-  is set to infinite, so physics contact (landing off-center, a glancing
-  touch against a neighbor) can never spin it — only the deliberate 90°
-  rotate key can. Normal inertia is restored the moment it locks, so the
-  settled stack can still be physically knocked over by a later piece,
-  which is the actual point of the physics.
-- On top of the above, every piece is also snapped to the nearest 90°
-  angle and back onto the grid at the instant it locks, as a defensive
-  fallback in case any residual drift ever slips through.
-- The landing indicator projects each cell of the active piece straight
-  down against the nearest surface below it (again using axis-aligned
-  bounds, exact for this game) to find where it will land.
+- Rotation states are explicit hand-authored tables (not computed via
+  matrix rotation), so every shape's 4 orientations are exactly what a
+  standard Tetris implementation would produce — no ambiguity, no
+  approximation.
+- Rotation uses a small set of wall-kick offsets (try the straight
+  rotation first, then nudge left/right/up by a cell or two) rather than
+  the full SRS kick tables — simpler, and robust enough that a rotation
+  near a wall or the floor almost always finds a valid spot.
+- Locking uses a standard "lock delay": once a piece can't move down
+  further, it has a short grace period (capped number of resets) before
+  it actually locks, so sliding a piece under an overhang at the last
+  moment still works.
+- Because it's a plain grid, there's no camera, no sleep/wake physics
+  tuning, no velocity clamping, and no tunneling — the entire class of
+  bugs that comes from simulating real physics for something that's
+  fundamentally discrete just doesn't apply here.
 
 ## Ideas for extending it
 
-- Add spell cards from the original game (haste, slow, boost blocks up).
-- Bring back optional wind gusts as a difficulty toggle.
-- Multiplayer via WebSockets, racing for height.
+- Hold piece (swap the current piece out for later).
+- T-spin detection and bonus scoring.
+- Ghost piece color options / toggle.
 - Local high-score leaderboard via `localStorage`.
+- Marathon vs. Sprint (40 lines) vs. Ultra (2-minute score attack) modes.
