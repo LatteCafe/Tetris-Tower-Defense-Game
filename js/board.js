@@ -89,6 +89,31 @@ TT.Board = (function () {
     return grid[r][c];
   }
 
+  function countFilledCells() {
+    let count = 0;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (grid[r][c]) count++;
+      }
+    }
+    return count;
+  }
+
+  // The topmost filled cell in each column — used to place turret
+  // decorations along the castle's outward-facing battlements.
+  function topFilledCellPerColumn() {
+    const tops = [];
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        if (grid[r][c]) {
+          tops.push({ row: r, col: c });
+          break;
+        }
+      }
+    }
+    return tops;
+  }
+
   return {
     COLS,
     ROWS,
@@ -99,5 +124,7 @@ TT.Board = (function () {
     clearFullRows,
     highestOccupiedRow,
     cellAt,
+    countFilledCells,
+    topFilledCellPerColumn,
   };
 })();

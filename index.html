@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Tetris Clone</title>
+<title>Castle Siege Tetris</title>
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -12,28 +12,59 @@
   <canvas id="canvas"></canvas>
 
   <div id="hud">
-    <div class="hud-cluster">
-      <div class="stat-pill">
-        <span class="label">Time</span>
-        <span class="value" id="stat-timer">00:00</span>
+    <div class="hud-left">
+      <div class="hud-cluster">
+        <div class="stat-pill">
+          <span class="label">Time</span>
+          <span class="value" id="stat-timer">00:00</span>
+        </div>
+        <div class="stat-pill">
+          <span class="label">Score</span>
+          <span class="value" id="stat-score">0</span>
+        </div>
+        <div class="stat-pill">
+          <span class="label">Lines</span>
+          <span class="value" id="stat-lines">0</span>
+        </div>
+        <div class="stat-pill">
+          <span class="label">Level</span>
+          <span class="value" id="stat-level">1</span>
+        </div>
       </div>
-      <div class="stat-pill">
-        <span class="label">Score</span>
-        <span class="value" id="stat-score">0</span>
-      </div>
-      <div class="stat-pill">
-        <span class="label">Lines</span>
-        <span class="value" id="stat-lines">0</span>
-      </div>
-      <div class="stat-pill">
-        <span class="label">Level</span>
-        <span class="value" id="stat-level">1</span>
+
+      <div class="bars-cluster">
+        <div class="bar-row">
+          <span class="bar-label">Castle</span>
+          <div class="bar-track hp-track">
+            <div class="bar-fill hp-fill" id="hp-bar-fill"></div>
+            <span class="bar-text" id="hp-text">100 / 100</span>
+          </div>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Horde</span>
+          <div class="bar-track mob-track">
+            <div class="bar-fill mob-fill" id="mob-bar-fill"></div>
+          </div>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Dragon</span>
+          <div class="bar-track boss-track">
+            <div class="bar-fill boss-fill" id="boss-bar-fill"></div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div id="next-piece">
-      <span class="label" style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);">Next</span>
-      <div id="next-swatch"></div>
+    <div class="hud-right">
+      <div id="next-piece">
+        <span class="label" style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);">Next</span>
+        <div id="next-swatch"></div>
+      </div>
+
+      <button id="btn-discard" class="discard-btn" disabled>
+        <span class="discard-fill" id="discard-fill"></span>
+        <span class="discard-label">Discard (C)</span>
+      </button>
     </div>
   </div>
 
@@ -41,12 +72,13 @@
 
   <div id="overlay" class="overlay">
     <div id="screen-start" class="panel">
-      <h1>Tetris</h1>
-      <p>Classic grid-based Tetris — clear lines to score, speed picks up
-        every level. You start with a random pile already at the bottom,
-        so it's not a clean slate.</p>
-      <div class="controls-hint">← → move &nbsp;·&nbsp; ↑ rotate CW &nbsp;·&nbsp; Z rotate CCW &nbsp;·&nbsp; ↓ soft drop &nbsp;·&nbsp; Space hard drop</div>
-      <button id="btn-start" class="btn">Start Game</button>
+      <h1>Castle Siege</h1>
+      <p>Build your castle wall by wall — every block adds an archer or
+        cannon to your battlements and raises your castle's max health.
+        Clear lines to strike the horde and the dragon below; leave them
+        standing too long and they'll strike back.</p>
+      <div class="controls-hint">← → move &nbsp;·&nbsp; ↑ rotate CW &nbsp;·&nbsp; Z rotate CCW &nbsp;·&nbsp; ↓ soft drop &nbsp;·&nbsp; Space hard drop &nbsp;·&nbsp; C discard</div>
+      <button id="btn-start" class="btn">Defend the Castle</button>
     </div>
 
     <div id="screen-gameover" class="panel hidden">
@@ -59,6 +91,7 @@
 
 <script src="js/pieces.js"></script>
 <script src="js/board.js"></script>
+<script src="js/combat.js"></script>
 <script src="js/input.js"></script>
 <script src="js/render.js"></script>
 <script src="js/ui.js"></script>

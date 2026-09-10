@@ -5,7 +5,7 @@ window.TT = window.TT || {};
 TT.Input = (function () {
   const keys = {};
   const justPressed = {};
-  const CAPTURED = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyZ'];
+  const CAPTURED = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyZ', 'KeyC'];
 
   window.addEventListener('keydown', (e) => {
     if (!keys[e.code]) justPressed[e.code] = true;

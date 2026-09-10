@@ -6,6 +6,7 @@ TT.Game = (function () {
   const board = TT.Board;
   const pieces = TT.Pieces;
   const input = TT.Input;
+  const combat = TT.Combat;
 
   const START_GARBAGE_ROWS = 5; // random pre-filled rows at the bottom on a fresh game
   const LOCK_DELAY_MS = 500; // grace period once grounded before a piece locks
@@ -13,9 +14,9 @@ TT.Game = (function () {
   const DAS_MS = 170; // delay before a held move starts auto-repeating
   const ARR_MS = 50; // time between auto-repeated moves while held
   const SOFT_DROP_INTERVAL_MS = 35; // effective drop speed while holding down
-  const BASE_DROP_INTERVAL_MS = 800; // level 1 gravity speed
+  const BASE_DROP_INTERVAL_MS = 800; // starting gravity speed
   const MIN_DROP_INTERVAL_MS = 90; // fastest gravity ever gets
-  const LINES_PER_LEVEL = 10;
+  const DISCARD_COOLDOWN_MS = 10000;
 
   let canvas;
   let state = 'ready'; // ready | playing | gameover
@@ -28,14 +29,13 @@ TT.Game = (function () {
   let grounded = false;
   let score = 0;
   let lines = 0;
-  let level = 1;
   let startTime = 0;
   let elapsed = 0;
   let lastFrameTime = 0;
   let moveHoldDir = 0;
   let moveRepeatTimer = 0;
-  let clearFlashRows = []; // rows to briefly flash before removal (visual only)
-  let clearFlashTimer = 0;
+  let discardCooldown = 0;
+  let gameOverCause = null; // 'space' | 'health'
 
   function init(canvasEl) {
     canvas = canvasEl;
@@ -47,6 +47,7 @@ TT.Game = (function () {
 
     refillQueueIfNeeded();
     TT.UI.updateNext(nextQueue[0]);
+    TT.UI.updateDiscardCooldown(0, DISCARD_COOLDOWN_MS);
 
     requestAnimationFrame(loop);
   }
@@ -75,7 +76,7 @@ TT.Game = (function () {
 
     if (!board.isValidPosition(pieces.cellsFor(type, 0), spawn.row, spawn.col)) {
       current = spawn;
-      gameOver();
+      gameOver('space');
       return;
     }
 
@@ -136,15 +137,6 @@ TT.Game = (function () {
     }
   }
 
-  function softDropStep() {
-    if (!current) return;
-    const cells = pieces.cellsFor(current.type, current.rotation);
-    if (board.isValidPosition(cells, current.row + 1, current.col)) {
-      current.row++;
-      score += 1;
-    }
-  }
-
   function hardDrop() {
     if (!current) return;
     const cells = pieces.cellsFor(current.type, current.rotation);
@@ -157,21 +149,28 @@ TT.Game = (function () {
     lockPiece();
   }
 
+  // Swaps the current piece out for the next one in queue, on a cooldown
+  // — for when you're dealt something you have no good spot for.
+  function discardPiece() {
+    if (!current || discardCooldown > 0) return;
+    discardCooldown = DISCARD_COOLDOWN_MS;
+    current = null;
+    spawnPiece();
+  }
+
   function lockPiece() {
     const cells = pieces.cellsFor(current.type, current.rotation);
     const color = pieces.colorFor(current.type);
     board.lockCells(cells, current.row, current.col, color);
+    combat.onPieceLocked(board.countFilledCells());
 
     const cleared = board.clearFullRows();
     if (cleared > 0) {
       applyScoreForClear(cleared);
       lines += cleared;
-      const newLevel = Math.floor(lines / LINES_PER_LEVEL) + 1;
-      if (newLevel !== level) {
-        level = newLevel;
-        TT.UI.showMilestone(`Level ${level}!`);
-      }
+      combat.onLinesCleared(cleared, cleared * board.COLS);
       TT.Render.flashClear();
+      TT.Render.spawnProjectiles(cleared * board.COLS);
     }
 
     current = null;
@@ -180,15 +179,21 @@ TT.Game = (function () {
 
   function applyScoreForClear(cleared) {
     const table = { 1: 100, 2: 300, 3: 500, 4: 800 };
-    score += (table[cleared] || 0) * level;
+    score += (table[cleared] || 0) * combat.getState().level;
   }
 
   function currentDropInterval() {
-    const interval = BASE_DROP_INTERVAL_MS - (level - 1) * 60;
+    const level = combat.getState().level;
+    const interval = BASE_DROP_INTERVAL_MS - (level - 1) * 40;
     return Math.max(MIN_DROP_INTERVAL_MS, interval);
   }
 
   function handleInput(delta) {
+    if (discardCooldown > 0) {
+      discardCooldown = Math.max(0, discardCooldown - delta);
+      TT.UI.updateDiscardCooldown(discardCooldown, DISCARD_COOLDOWN_MS);
+    }
+
     if (!current) return;
 
     const left = input.isDown('ArrowLeft');
@@ -214,6 +219,7 @@ TT.Game = (function () {
     if (input.consumePressed('ArrowUp')) tryRotate(1);
     if (input.consumePressed('KeyZ')) tryRotate(-1);
     if (input.consumePressed('Space')) hardDrop();
+    if (input.consumePressed('KeyC')) discardPiece();
   }
 
   function updateGravity(delta) {
@@ -239,14 +245,23 @@ TT.Game = (function () {
     }
   }
 
-  function gameOver() {
+  function gameOver(cause) {
     state = 'gameover';
-    TT.UI.showGameOver(score, lines, level);
+    gameOverCause = cause;
+    const s = combat.getState();
+    TT.UI.showGameOver(cause, score, lines, s.level);
   }
 
   function reset() {
     board.init();
     board.fillRandomStart(START_GARBAGE_ROWS);
+
+    combat.init({
+      onEnemyDamaged: () => TT.Render.flashDragonHit(),
+      onPlayerDamaged: () => TT.Render.dragonAttackPulse(),
+      onLevelComplete: (lvl) => TT.UI.showMilestone(`Level ${lvl}!`),
+      onGameOverHP: () => gameOver('health'),
+    });
 
     bag = [];
     nextQueue = [];
@@ -255,9 +270,9 @@ TT.Game = (function () {
     lockTimer = 0;
     lockResets = 0;
     grounded = false;
+    discardCooldown = 0;
     score = 0;
     lines = 0;
-    level = 1;
 
     spawnPiece();
   }
@@ -276,21 +291,24 @@ TT.Game = (function () {
     if (state === 'playing') {
       handleInput(delta);
       updateGravity(delta);
+      combat.update(delta, board.countFilledCells());
 
       elapsed = now - startTime;
-      TT.UI.updateStats(elapsed, score, lines, level);
+      TT.UI.updateStats(elapsed, score, lines, combat.getState());
     }
 
     TT.Render.frame({
       current,
       state,
-    });
+      combat: combat.getState(),
+    }, delta);
     requestAnimationFrame(loop);
   }
 
   return {
     init,
     startGame,
+    discardPiece,
     get state() { return state; },
   };
 })();
