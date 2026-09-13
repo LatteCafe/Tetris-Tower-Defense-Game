@@ -1,27 +1,9 @@
 # Castle Siege — Tetris Tower Defense
 
-Classic grid-based Tetris (no physics engine — exact integer grid logic)
+Classic grid-based Tetris 
 fused with a tower-defense layer: every block you place becomes part of
 your castle's battlements, automatically firing on the horde and dragon
 below, while they periodically strike back.
-
-## A note on interpreting the brief
-
-A couple of the requested mechanics were ambiguous enough that I made an
-explicit design call rather than guess silently — flagging it here so
-it's easy to adjust if it's not what was meant:
-
-- **Level progression** — each level has a lines-cleared target (0, 1, 2,
-  4, 8, 16... doubling from level 2 on, exactly as specified), but rather
-  than being a separate pass/fail gate, that number is used to size the
-  level's enemy HP pool (bigger target → tankier enemies). A level is
-  actually completed by grinding the mob+boss pool to zero via combat,
-  which naturally takes roughly that much cleared-line damage to achieve.
-- **The dragon fights for you.** It sits beside your castle and
-  periodically attacks the horde/boss on its own; every line you clear
-  permanently adds to how much damage it deals per hit. The horde and
-  boss are the enemy, and they're the ones periodically striking your
-  castle back.
 
 ## Gameplay
 
@@ -34,7 +16,7 @@ it's easy to adjust if it's not what was meant:
 - **Turrets**: the topmost block in every column sprouts an archer or
   cannon, and the whole castle passively fires on the horde/boss once a
   second, dealing damage proportional to your total block count.
-- **Your dragon** fires on the horde/boss on its own fixed timer. Its
+- **Dragon** fires on the horde/boss on its own fixed timer. Its
   damage only ever goes up — every line you clear permanently adds to it,
   which is what lets your output keep pace as levels get harder.
 - **Line clears** also permanently raise a separate damage multiplier
@@ -128,9 +110,3 @@ npx serve .
   `onDragonAttack`, `onPlayerDamaged`, `onLevelComplete`) — render.js has
   no direct knowledge of game rules, just visual reactions to events.
 
-## Ideas for extending it
-
-- Distinct mob "waves" with their own sprites, rather than one HP pool.
-- Spell/ability cards purchasable with score (heal, damage boost, freeze).
-- Hold piece, T-spin bonus damage.
-- Local high-score leaderboard via `localStorage`.
