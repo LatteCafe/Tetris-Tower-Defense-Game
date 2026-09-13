@@ -1,28 +1,47 @@
-// combat.js — health, enemy pools, damage math, dragon attacks, and
-// endless level scaling. Pure numeric logic, no rendering or DOM.
+// combat.js — health, enemy pools, damage math, the player's dragon
+// ally, the horde/boss's counter-attacks, and endless level scaling.
+// Pure numeric logic, no rendering or DOM.
+//
+// Roles (this matters, got corrected once already):
+//   - The DRAGON fights FOR the player. It attacks the horde/boss
+//     periodically, and every line you clear permanently adds to how
+//     much damage it deals per hit.
+//   - The HORDE (mobs) and BOSS are the enemy. Together they're a single
+//     HP pool per level, split 50/50; mobs soak damage first, boss only
+//     takes overflow once mobs are dead. They periodically strike the
+//     player's castle back.
+//   - Turrets on the castle's own battlements also passively chip away
+//     at the horde/boss, scaling with total blocks placed.
 window.TT = window.TT || {};
 
 TT.Combat = (function () {
   const BASE_MAX_HP = 100;
   const HP_PER_BLOCK = 2; // castle max HP grows with every block placed
 
-  const BASE_ENEMY_HP = 300; // level 1's total mob+boss pool
-  const DAMAGE_PER_BLOCK_CLEAR = 6; // burst damage per block in a cleared line
+  const BASE_ENEMY_HP = 300; // level 1's total horde+boss pool
   const DAMAGE_PER_BLOCK_TICK = 0.4; // passive turret damage per block, per tick
   const TURRET_TICK_MS = 1000;
-  const MULTIPLIER_PER_LINE = 0.03; // +3% permanent damage per line ever cleared
+  const MULTIPLIER_PER_LINE = 0.03; // +3% permanent damage per line ever cleared, applies to both turrets and the dragon
 
-  const DRAGON_ATTACK_BASE_MS = 6000; // time between dragon attacks at level 1
-  const DRAGON_ATTACK_MIN_MS = 2200; // fastest the dragon ever attacks
-  const DRAGON_ATTACK_STEP_MS = 250; // interval shrinks this much per level
-  const DRAGON_DAMAGE_BASE = 6;
-  const DRAGON_DAMAGE_PER_LEVEL = 3;
+  const DRAGON_BASE_DAMAGE = 15;
+  const DRAGON_DAMAGE_PER_BLOCK_CLEARED = 2; // permanent, added to every future hit
+  const DRAGON_ATTACK_INTERVAL_MS = 2200; // fixed — the dragon doesn't get slower as levels get harder, it gets stronger from your line clears instead
+
+  // Tuned deliberately gentler than a first pass that turned out to
+  // create an unavoidable death around a specific level regardless of
+  // skill — verified across several simulated play paces before shipping.
+  const ENEMY_ATTACK_BASE_MS = 7000;
+  const ENEMY_ATTACK_MIN_MS = 3000;
+  const ENEMY_ATTACK_STEP_MS = 200;
+  const ENEMY_DAMAGE_BASE = 5;
+  const ENEMY_DAMAGE_PER_LEVEL = 2;
 
   let maxHP, hp;
   let level, linesRequired, linesThisLevel, totalLinesEver;
   let mobHP, mobMaxHP, bossHP, bossMaxHP;
   let damageMultiplier;
-  let turretTimer, dragonTimer, dragonAttackInterval;
+  let dragonDamage;
+  let turretTimer, dragonTimer, enemyTimer, enemyAttackInterval;
   let hooks = {};
 
   // Lines needed to reach this level's "difficulty" from the previous one
@@ -46,9 +65,11 @@ TT.Combat = (function () {
     linesThisLevel = 0;
     totalLinesEver = 0;
     damageMultiplier = 1;
+    dragonDamage = DRAGON_BASE_DAMAGE;
     turretTimer = 0;
     dragonTimer = 0;
-    dragonAttackInterval = DRAGON_ATTACK_BASE_MS;
+    enemyTimer = 0;
+    enemyAttackInterval = ENEMY_ATTACK_BASE_MS;
     setLevelPool(1);
   }
 
@@ -72,7 +93,7 @@ TT.Combat = (function () {
   }
 
   // Mobs absorb damage first; only once they're fully dead does damage
-  // start coming off the boss.
+  // start coming off the boss. Used by both turrets and the dragon.
   function dealDamageToEnemy(rawAmount) {
     const amount = rawAmount * damageMultiplier;
     if (mobHP > 0) {
@@ -93,25 +114,28 @@ TT.Combat = (function () {
       linesRequired = linesRequiredForLevel(level);
       linesThisLevel = 0;
       setLevelPool(level);
-      dragonAttackInterval = Math.max(
-        DRAGON_ATTACK_MIN_MS,
-        DRAGON_ATTACK_BASE_MS - (level - 1) * DRAGON_ATTACK_STEP_MS
+      enemyAttackInterval = Math.max(
+        ENEMY_ATTACK_MIN_MS,
+        ENEMY_ATTACK_BASE_MS - (level - 1) * ENEMY_ATTACK_STEP_MS
       );
       if (hooks.onLevelComplete) hooks.onLevelComplete(level);
     }
   }
 
-  // Line clears both burst-damage the enemy pool AND permanently raise
-  // the damage multiplier — the scaling boost mentioned in the brief.
+  // Line clears do two things: permanently add to the dragon's own
+  // damage (the specific ask — every future dragon hit gets bigger), and
+  // raise the broader percentage multiplier that also boosts turret
+  // damage, so both scale up as levels get harder.
   function onLinesCleared(numLines, blocksInClear) {
     totalLinesEver += numLines;
     linesThisLevel += numLines;
     damageMultiplier = 1 + totalLinesEver * MULTIPLIER_PER_LINE;
-    dealDamageToEnemy(blocksInClear * DAMAGE_PER_BLOCK_CLEAR);
+    dragonDamage += blocksInClear * DRAGON_DAMAGE_PER_BLOCK_CLEARED;
   }
 
   // Called every frame with the current total filled-cell count — drives
-  // both the passive turret DPS and the dragon's periodic counter-attack.
+  // turret DPS, the dragon's own attack cadence, and the horde/boss's
+  // counter-attack on the player.
   function update(delta, filledCellCount) {
     turretTimer += delta;
     while (turretTimer >= TURRET_TICK_MS) {
@@ -122,9 +146,16 @@ TT.Combat = (function () {
     }
 
     dragonTimer += delta;
-    if (dragonTimer >= dragonAttackInterval) {
+    if (dragonTimer >= DRAGON_ATTACK_INTERVAL_MS) {
       dragonTimer = 0;
-      const dmg = DRAGON_DAMAGE_BASE + (level - 1) * DRAGON_DAMAGE_PER_LEVEL;
+      dealDamageToEnemy(dragonDamage);
+      if (hooks.onDragonAttack) hooks.onDragonAttack();
+    }
+
+    enemyTimer += delta;
+    if (enemyTimer >= enemyAttackInterval) {
+      enemyTimer = 0;
+      const dmg = ENEMY_DAMAGE_BASE + (level - 1) * ENEMY_DAMAGE_PER_LEVEL;
       hp = Math.max(0, hp - dmg);
       if (hooks.onPlayerDamaged) hooks.onPlayerDamaged(dmg);
       if (hp <= 0 && hooks.onGameOverHP) hooks.onGameOverHP();
@@ -134,8 +165,8 @@ TT.Combat = (function () {
   function getState() {
     return {
       hp, maxHP, level, linesRequired, linesThisLevel, totalLinesEver,
-      mobHP, mobMaxHP, bossHP, bossMaxHP, damageMultiplier,
-      dragonTimer, dragonAttackInterval,
+      mobHP, mobMaxHP, bossHP, bossMaxHP, damageMultiplier, dragonDamage,
+      enemyTimer, enemyAttackInterval,
     };
   }
 

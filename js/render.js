@@ -1,5 +1,8 @@
-// render.js — hand-rolled canvas renderer: castle-block board, an
-// animated dragon in the pit below it, and turret projectile effects.
+// render.js — hand-rolled canvas renderer. The blocks themselves carry
+// the castle theming (stone texture, battlement turrets); the frame
+// around the board is deliberately understated so it doesn't compete
+// with them. Below the board: the player's dragon ally on one side, the
+// horde it's fighting in the middle, and the boss looming behind them.
 window.TT = window.TT || {};
 
 TT.Render = (function () {
@@ -17,12 +20,17 @@ TT.Render = (function () {
   let boardPxH = 0;
   let offsetX = 0;
   let offsetY = 0;
+  let pitY = 0;
+  let pitH = 0;
   let dragonCx = 0;
-  let dragonCy = 0;
+  let hordeCx = 0;
+  let bossCx = 0;
 
   let flashAlpha = 0; // line-clear board flash
-  let dragonHitFlash = 0; // dragon takes-damage flash
-  let dragonAttackAnim = 0; // dragon lunges when it attacks the player
+  let enemyHitFlash = 0; // horde/boss takes-damage flash
+  let dragonAttackAnim = 0; // dragon lunges when it fires
+  let dragonPowerAnim = 0; // dragon glows when a line clear boosts it
+  let castleShake = 0; // brief shake when the horde/boss strikes back
   let projectiles = []; // { x, y, targetX, targetY, t, kind }
   let ambientFireTimer = 0;
 
@@ -33,21 +41,21 @@ TT.Render = (function () {
 
     stars = Array.from({ length: 60 }, () => ({
       x: Math.random() * width,
-      y: Math.random() * height * 0.6,
+      y: Math.random() * height * 0.55,
       r: Math.random() * 1.3 + 0.4,
       phase: Math.random() * Math.PI * 2,
     }));
 
-    embers = Array.from({ length: 24 }, () => spawnEmber());
+    embers = Array.from({ length: 20 }, () => spawnEmber());
   }
 
   function spawnEmber() {
     return {
       x: Math.random() * width,
       y: height * (0.5 + Math.random() * 0.5),
-      speed: 0.15 + Math.random() * 0.35,
-      drift: (Math.random() - 0.5) * 0.3,
-      r: Math.random() * 1.6 + 0.6,
+      speed: 0.15 + Math.random() * 0.3,
+      drift: (Math.random() - 0.5) * 0.25,
+      r: Math.random() * 1.5 + 0.5,
       phase: Math.random() * Math.PI * 2,
     };
   }
@@ -56,18 +64,20 @@ TT.Render = (function () {
     width = canvas.width;
     height = canvas.height;
 
-    const dragonPitH = height * 0.16;
+    pitH = height * 0.18;
     const maxCellW = (width * 0.6) / board.COLS;
-    const maxCellH = ((height - dragonPitH) * 0.84) / board.ROWS;
+    const maxCellH = ((height - pitH) * 0.84) / board.ROWS;
     cellSize = Math.floor(Math.min(maxCellW, maxCellH));
 
     boardPxW = cellSize * board.COLS;
     boardPxH = cellSize * board.ROWS;
     offsetX = (width - boardPxW) / 2;
-    offsetY = (height - dragonPitH) * 0.5 - boardPxH * 0.42;
+    offsetY = (height - pitH) * 0.5 - boardPxH * 0.42;
 
-    dragonCx = width / 2;
-    dragonCy = offsetY + boardPxH + dragonPitH * 0.55;
+    pitY = offsetY + boardPxH;
+    dragonCx = width * 0.22;
+    hordeCx = width * 0.52;
+    bossCx = width * 0.78;
   }
 
   // ---------- Background ----------
@@ -106,27 +116,22 @@ TT.Render = (function () {
     ctx.restore();
   }
 
-  // ---------- Board frame & cells ----------
+  // ---------- Board frame (deliberately plain — the blocks carry the theme) ----------
 
   function drawBoardFrame() {
+    const shakeX = castleShake > 0 ? (Math.random() - 0.5) * castleShake * 6 : 0;
     ctx.save();
-    ctx.fillStyle = 'rgba(40, 26, 20, 0.6)';
-    ctx.fillRect(offsetX - 12, offsetY - 12, boardPxW + 24, boardPxH + 24);
-    ctx.strokeStyle = 'rgba(212, 175, 55, 0.35)';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(offsetX - 12, offsetY - 12, boardPxW + 24, boardPxH + 24);
-    ctx.restore();
+    ctx.translate(shakeX, 0);
 
-    // Crenellations along the top of the whole castle frame.
-    ctx.save();
-    ctx.fillStyle = 'rgba(212, 175, 55, 0.28)';
-    const merlonW = boardPxW / 12;
-    for (let i = 0; i < 12; i += 2) {
-      ctx.fillRect(offsetX + i * merlonW, offsetY - 22, merlonW, 12);
-    }
-    ctx.restore();
+    ctx.fillStyle = 'rgba(30, 20, 16, 0.5)';
+    ctx.fillRect(offsetX - 10, offsetY - 10, boardPxW + 20, boardPxH + 20);
 
-    ctx.save();
+    ctx.strokeStyle = castleShake > 0
+      ? `rgba(200, 60, 50, ${0.3 + castleShake * 0.5})`
+      : 'rgba(212, 175, 55, 0.25)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(offsetX - 10, offsetY - 10, boardPxW + 20, boardPxH + 20);
+
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
     ctx.lineWidth = 1;
     for (let c = 0; c <= board.COLS; c++) {
@@ -136,14 +141,9 @@ TT.Render = (function () {
       ctx.lineTo(x, offsetY + boardPxH);
       ctx.stroke();
     }
-    for (let r = 0; r <= board.ROWS; r++) {
-      const y = offsetY + r * cellSize;
-      ctx.beginPath();
-      ctx.moveTo(offsetX, y);
-      ctx.lineTo(offsetX + boardPxW, y);
-      ctx.stroke();
-    }
     ctx.restore();
+
+    if (castleShake > 0) castleShake = Math.max(0, castleShake - 0.06);
   }
 
   function cellRect(r, c) {
@@ -162,33 +162,49 @@ TT.Render = (function () {
     };
   }
 
+  // ---------- Cells: this is where the castle theming actually lives ----------
+
+  function blendWithStone(hex, stoneAmount) {
+    const h = parseInt(hex.slice(1), 16);
+    const r = (h >> 16) & 255, g = (h >> 8) & 255, b = h & 255;
+    const stoneR = 150, stoneG = 140, stoneB = 122;
+    const mix = (a, s) => Math.round(a * (1 - stoneAmount) + s * stoneAmount);
+    return `rgb(${mix(r, stoneR)},${mix(g, stoneG)},${mix(b, stoneB)})`;
+  }
+
   function drawCell(r, c, color, opts) {
-    if (r < 0) return; // above the visible board (spawn area)
+    if (r < 0) return;
     const { x, y, w, h } = cellRect(r, c);
     const pad = 1.5;
     const locked = opts && opts.locked;
-    const alpha = (opts && opts.alpha) || 1;
+    const fill = locked ? blendWithStone(color, 0.45) : color;
 
     ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = color;
+    ctx.fillStyle = fill;
     ctx.fillRect(x + pad, y + pad, w - pad * 2, h - pad * 2);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.2)';
-    ctx.fillRect(x + pad, y + pad, w - pad * 2, Math.max(2, h * 0.2));
+    // Beveled highlight (top-left) / shadow (bottom-right) for a
+    // masonry-block feel rather than a flat tile.
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.fillRect(x + pad, y + pad, w - pad * 2, Math.max(2, h * 0.16));
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(x + pad, y + h - pad - Math.max(2, h * 0.14), w - pad * 2, Math.max(2, h * 0.14));
 
     if (locked) {
-      // Mortar lines — makes locked cells read as stone blockwork rather
-      // than a flat color, distinct from the active falling piece.
-      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      // Mortar lines on every edge, splitting the cell into a little
+      // brick pattern rather than one flat square — this is what makes
+      // locked blocks actually read as castle stonework.
+      ctx.strokeStyle = 'rgba(40, 30, 20, 0.5)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(x + pad, y + h * 0.55);
-      ctx.lineTo(x + w - pad, y + h * 0.55);
+      ctx.moveTo(x + pad, y + h * 0.5);
+      ctx.lineTo(x + w - pad, y + h * 0.5);
+      ctx.moveTo(x + w * 0.5, y + pad);
+      ctx.lineTo(x + w * 0.5, y + h * 0.5);
       ctx.stroke();
     }
 
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x + pad, y + pad, w - pad * 2, h - pad * 2);
     ctx.restore();
@@ -201,7 +217,6 @@ TT.Render = (function () {
 
     ctx.save();
     if (kind === 'archer') {
-      // A little hooded figure: round head + triangular body.
       ctx.fillStyle = '#e9dfc9';
       ctx.beginPath();
       ctx.arc(cx, topY + h * 0.1, w * 0.11, 0, Math.PI * 2);
@@ -213,14 +228,12 @@ TT.Render = (function () {
       ctx.lineTo(cx, topY + h * 0.22);
       ctx.closePath();
       ctx.fill();
-      // Tiny bow.
       ctx.strokeStyle = '#c9a24a';
       ctx.lineWidth = 1.4;
       ctx.beginPath();
       ctx.arc(cx + w * 0.16, topY + h * 0.28, w * 0.14, -0.9, 0.9);
       ctx.stroke();
     } else {
-      // A stubby cannon barrel poking up.
       ctx.fillStyle = '#3a3a42';
       ctx.fillRect(cx - w * 0.16, topY, w * 0.32, h * 0.42);
       ctx.beginPath();
@@ -241,7 +254,6 @@ TT.Render = (function () {
         if (color) drawCell(r, c, color, { locked: true });
       }
     }
-    // Battlement turrets along the exposed top edge of the stack.
     board.topFilledCellPerColumn().forEach(({ row, col }) => {
       drawTurret(row, col, col % 2 === 0 ? 'archer' : 'cannon');
     });
@@ -284,88 +296,241 @@ TT.Render = (function () {
     });
   }
 
-  // ---------- Dragon ----------
+  // ---------- The dragon (player's ally) ----------
 
-  function drawDragon(combatState) {
-    if (!combatState) return;
+  function drawDragon() {
     const bob = Math.sin(clockMs * 0.0025) * 4;
-    const lungeT = dragonAttackAnim;
-    const lunge = lungeT * 10;
-    const cy = dragonCy + bob + lunge;
-    const cx = dragonCx;
-    const scale = Math.min(width / 500, 1.4);
-
-    const bodyGrad = ctx.createRadialGradient(cx, cy, 4, cx, cy, 70 * scale);
-    const flash = dragonHitFlash;
-    bodyGrad.addColorStop(0, flash > 0 ? '#fff3c4' : '#ff6b4d');
-    bodyGrad.addColorStop(1, flash > 0 ? '#ffb37a' : '#8a1f2b');
+    const lunge = dragonAttackAnim * 16;
+    const cy = pitY + pitH * 0.55 + bob;
+    const cx = dragonCx + lunge;
+    const scale = Math.min(width / 600, 1.1);
+    const glow = dragonPowerAnim;
 
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(scale, scale);
 
-    // Wings
-    ctx.fillStyle = 'rgba(120, 30, 40, 0.85)';
-    const wingFlap = Math.sin(clockMs * 0.006) * 10;
-    ctx.beginPath();
-    ctx.moveTo(-20, -6);
-    ctx.lineTo(-70, -30 - wingFlap);
-    ctx.lineTo(-55, 4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(20, -6);
-    ctx.lineTo(70, -30 - wingFlap);
-    ctx.lineTo(55, 4);
-    ctx.closePath();
-    ctx.fill();
+    const bodyGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, 60);
+    if (glow > 0) {
+      bodyGrad.addColorStop(0, '#fff3c4');
+      bodyGrad.addColorStop(1, '#f0a83a');
+    } else {
+      bodyGrad.addColorStop(0, '#5ec9d6');
+      bodyGrad.addColorStop(1, '#1c5f73');
+    }
 
-    // Tail
-    ctx.strokeStyle = '#8a1f2b';
-    ctx.lineWidth = 10;
+    // Tail, curled behind it.
+    ctx.strokeStyle = '#1c5f73';
+    ctx.lineWidth = 9;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(-30, 20);
-    ctx.quadraticCurveTo(-60, 30, -80, 10);
+    ctx.moveTo(-28, 14);
+    ctx.quadraticCurveTo(-55, 26, -50, 4);
+    ctx.quadraticCurveTo(-46, -10, -60, -6);
     ctx.stroke();
 
-    // Body
+    // Wings, swept back — smoother membrane shape via quadratic curves.
+    const flap = Math.sin(clockMs * 0.005) * 8;
+    [-1, 1].forEach((side) => {
+      ctx.fillStyle = 'rgba(30, 90, 100, 0.85)';
+      ctx.beginPath();
+      ctx.moveTo(side * 14, -10);
+      ctx.quadraticCurveTo(side * 45, -34 - flap, side * 66, -14 - flap);
+      ctx.quadraticCurveTo(side * 44, -4, side * 30, 8);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    // Spine spikes.
+    ctx.fillStyle = '#123a46';
+    for (let i = 0; i < 4; i++) {
+      const sx = -18 + i * 12;
+      ctx.beginPath();
+      ctx.moveTo(sx, -18);
+      ctx.lineTo(sx + 5, -28 - i);
+      ctx.lineTo(sx + 10, -18);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Body.
     ctx.fillStyle = bodyGrad;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 42, 26, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 34, 20, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Head / neck
+    // Neck + head, facing right toward the horde.
     ctx.beginPath();
-    ctx.ellipse(38 + lunge, -6, 18, 13, -0.2, 0, Math.PI * 2);
+    ctx.ellipse(34, -8, 15, 10, -0.25, 0, Math.PI * 2);
     ctx.fill();
 
-    // Horns
-    ctx.fillStyle = '#4a1013';
+    // Snout.
     ctx.beginPath();
-    ctx.moveTo(44 + lunge, -16);
-    ctx.lineTo(50 + lunge, -28);
-    ctx.lineTo(46 + lunge, -14);
+    ctx.moveTo(44, -10);
+    ctx.quadraticCurveTo(58, -8, 56, -2);
+    ctx.quadraticCurveTo(50, -2, 44, -4);
     ctx.closePath();
     ctx.fill();
 
-    // Eye
-    ctx.fillStyle = flash > 0 ? '#402000' : '#ffe36e';
+    // Horns.
+    ctx.fillStyle = '#0c2830';
     ctx.beginPath();
-    ctx.arc(44 + lunge, -9, 2.6, 0, Math.PI * 2);
+    ctx.moveTo(30, -18);
+    ctx.lineTo(34, -30);
+    ctx.lineTo(32, -16);
+    ctx.closePath();
     ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(38, -18);
+    ctx.lineTo(44, -28);
+    ctx.lineTo(40, -15);
+    ctx.closePath();
+    ctx.fill();
+
+    // Eye.
+    ctx.fillStyle = glow > 0 ? '#3a1e00' : '#ffe36e';
+    ctx.beginPath();
+    ctx.arc(40, -10, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Fire breath, only while attacking.
+    if (dragonAttackAnim > 0.3) {
+      const fireGrad = ctx.createLinearGradient(56, -4, 90, -4);
+      fireGrad.addColorStop(0, 'rgba(255,180,60,0.9)');
+      fireGrad.addColorStop(1, 'rgba(255,180,60,0)');
+      ctx.fillStyle = fireGrad;
+      ctx.beginPath();
+      ctx.moveTo(56, -6);
+      ctx.lineTo(90, -3);
+      ctx.lineTo(56, 2);
+      ctx.closePath();
+      ctx.fill();
+    }
 
     ctx.restore();
 
-    if (flash > 0) dragonHitFlash = Math.max(0, flash - 0.05);
-    if (lungeT > 0) dragonAttackAnim = Math.max(0, lungeT - 0.05);
+    if (dragonAttackAnim > 0) dragonAttackAnim = Math.max(0, dragonAttackAnim - 0.05);
+    if (dragonPowerAnim > 0) dragonPowerAnim = Math.max(0, dragonPowerAnim - 0.02);
   }
 
-  function flashDragonHit() {
-    dragonHitFlash = 1;
-  }
-
-  function dragonAttackPulse() {
+  function dragonFires() {
     dragonAttackAnim = 1;
+    const target = { x: hordeCx, y: pitY + pitH * 0.5 };
+    projectiles.push({
+      x: dragonCx + 50, y: pitY + pitH * 0.45,
+      targetX: target.x, targetY: target.y, t: 0, kind: 'fireball',
+    });
+  }
+
+  function dragonPowerUp() {
+    dragonPowerAnim = 1;
+  }
+
+  // ---------- Horde & boss (the enemy) ----------
+
+  function drawHorde(combatState) {
+    if (!combatState) return;
+    const pct = Math.max(0, combatState.mobHP / combatState.mobMaxHP);
+    const count = Math.max(0, Math.ceil(pct * 6));
+    const baseY = pitY + pitH * 0.62;
+
+    for (let i = 0; i < count; i++) {
+      const spread = (i - (count - 1) / 2) * 22;
+      const jitter = Math.sin(clockMs * 0.006 + i * 1.7) * 2;
+      const mx = hordeCx + spread;
+      const my = baseY + jitter;
+      const hitGlow = enemyHitFlash;
+
+      ctx.save();
+      ctx.fillStyle = hitGlow > 0 ? '#ffe9c7' : '#5a3a52';
+      ctx.beginPath();
+      ctx.ellipse(mx, my, 9, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Two small horns.
+      ctx.fillStyle = '#2e1b28';
+      ctx.beginPath();
+      ctx.moveTo(mx - 5, my - 6);
+      ctx.lineTo(mx - 7, my - 12);
+      ctx.lineTo(mx - 3, my - 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(mx + 3, my - 6);
+      ctx.lineTo(mx + 7, my - 12);
+      ctx.lineTo(mx + 5, my - 6);
+      ctx.closePath();
+      ctx.fill();
+      // Eyes.
+      ctx.fillStyle = '#ff5a4d';
+      ctx.beginPath();
+      ctx.arc(mx - 3, my - 1, 1.4, 0, Math.PI * 2);
+      ctx.arc(mx + 3, my - 1, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawBoss(combatState) {
+    if (!combatState) return;
+    const mobsAlive = combatState.mobHP > 0;
+    const pct = Math.max(0, combatState.bossHP / combatState.bossMaxHP);
+    const scale = mobsAlive ? 0.75 : 1;
+    const alpha = mobsAlive ? 0.4 : 1;
+    const bob = Math.sin(clockMs * 0.0018) * 3;
+    const cy = pitY + pitH * 0.55 + bob;
+    const hitGlow = enemyHitFlash;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(bossCx, cy);
+    ctx.scale(scale, scale);
+
+    ctx.fillStyle = hitGlow > 0 ? '#ffd9c4' : '#3a1030';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 26, 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Large curved horns.
+    ctx.strokeStyle = '#150414';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-14, -14);
+    ctx.quadraticCurveTo(-26, -34, -14, -40);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(14, -14);
+    ctx.quadraticCurveTo(26, -34, 14, -40);
+    ctx.stroke();
+
+    // Glowing eyes.
+    ctx.fillStyle = '#ff2a2a';
+    ctx.beginPath();
+    ctx.arc(-8, -4, 3, 0, Math.PI * 2);
+    ctx.arc(8, -4, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Fading HP-based cracks/damage marks once heavily hurt.
+    if (pct < 0.4) {
+      ctx.strokeStyle = 'rgba(255,80,60,0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-6, 4);
+      ctx.lineTo(2, 14);
+      ctx.moveTo(6, 2);
+      ctx.lineTo(12, 12);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function flashEnemyHit() {
+    enemyHitFlash = 1;
+  }
+
+  function castleUnderAttack() {
+    castleShake = 1;
   }
 
   // ---------- Projectiles ----------
@@ -381,13 +546,13 @@ TT.Render = (function () {
     return positions;
   }
 
-  function spawnProjectiles(blockCount) {
-    const count = Math.max(1, Math.min(10, Math.round(blockCount / 4)));
+  function spawnProjectiles(count) {
+    const target = { x: hordeCx, y: pitY + pitH * 0.5 };
     firePositions(count).forEach((pos, i) => {
       projectiles.push({
         x: pos.x, y: pos.y,
-        targetX: dragonCx + (Math.random() - 0.5) * 30,
-        targetY: dragonCy,
+        targetX: target.x + (Math.random() - 0.5) * 30,
+        targetY: target.y,
         t: 0,
         kind: i % 2 === 0 ? 'arrow' : 'ball',
       });
@@ -397,12 +562,20 @@ TT.Render = (function () {
   function updateAndDrawProjectiles(delta) {
     projectiles = projectiles.filter((p) => p.t < 1);
     projectiles.forEach((p) => {
-      p.t += delta / 450;
+      p.t += delta / (p.kind === 'fireball' ? 300 : 450);
       const x = p.x + (p.targetX - p.x) * p.t;
       const y = p.y + (p.targetY - p.y) * p.t;
 
       ctx.save();
-      if (p.kind === 'ball') {
+      if (p.kind === 'fireball') {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, 7);
+        g.addColorStop(0, '#fff3c4');
+        g.addColorStop(1, 'rgba(255,120,40,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, 7, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.kind === 'ball') {
         ctx.fillStyle = '#2a2a2a';
         ctx.beginPath();
         ctx.arc(x, y, 4, 0, Math.PI * 2);
@@ -432,9 +605,9 @@ TT.Render = (function () {
   function ambientFire(delta, filledCellCount) {
     if (filledCellCount <= 0) return;
     ambientFireTimer += delta;
-    if (ambientFireTimer >= 1200) {
+    if (ambientFireTimer >= 1000) {
       ambientFireTimer = 0;
-      spawnProjectiles(4);
+      spawnProjectiles(Math.max(1, Math.min(6, Math.round(filledCellCount / 8))));
     }
   }
 
@@ -468,11 +641,18 @@ TT.Render = (function () {
     }
 
     drawFlash();
-    drawDragon(opts.combat);
+    drawHorde(opts.combat);
+    drawBoss(opts.combat);
+    drawDragon();
 
     ambientFire(delta || 16.67, board.countFilledCells());
     updateAndDrawProjectiles(delta || 16.67);
+
+    if (enemyHitFlash > 0) enemyHitFlash = Math.max(0, enemyHitFlash - 0.06);
   }
 
-  return { init, frame, flashClear, flashDragonHit, dragonAttackPulse, spawnProjectiles };
+  return {
+    init, frame, flashClear,
+    flashEnemyHit, dragonFires, dragonPowerUp, castleUnderAttack,
+  };
 })();

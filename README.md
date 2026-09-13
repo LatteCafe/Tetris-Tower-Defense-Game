@@ -11,15 +11,17 @@ A couple of the requested mechanics were ambiguous enough that I made an
 explicit design call rather than guess silently — flagging it here so
 it's easy to adjust if it's not what was meant:
 
-- **"Cleared lines damage is added to the dragon's damage"** — implemented
-  as *line clears deal burst damage to the enemy pool* (not that clearing
-  lines makes the dragon hit harder).
 - **Level progression** — each level has a lines-cleared target (0, 1, 2,
   4, 8, 16... doubling from level 2 on, exactly as specified), but rather
   than being a separate pass/fail gate, that number is used to size the
   level's enemy HP pool (bigger target → tankier enemies). A level is
   actually completed by grinding the mob+boss pool to zero via combat,
   which naturally takes roughly that much cleared-line damage to achieve.
+- **The dragon fights for you.** It sits beside your castle and
+  periodically attacks the horde/boss on its own; every line you clear
+  permanently adds to how much damage it deals per hit. The horde and
+  boss are the enemy, and they're the ones periodically striking your
+  castle back.
 
 ## Gameplay
 
@@ -30,23 +32,25 @@ it's easy to adjust if it's not what was meant:
   and the gain also heals you) — building bigger is itself a survival
   strategy, not just a stacking risk.
 - **Turrets**: the topmost block in every column sprouts an archer or
-  cannon, and the whole castle passively fires on the enemy pool once a
+  cannon, and the whole castle passively fires on the horde/boss once a
   second, dealing damage proportional to your total block count.
-- **Line clears** deal a direct burst of damage to the enemy pool *and*
-  permanently raise a damage multiplier (+3% per line, forever) — this is
-  the mechanic that lets your output scale to keep pace with harder
-  levels.
-- **Enemy pool**: each level has a total HP pool split 50/50 between a
-  mob horde and a boss dragon. Mobs absorb damage first; only once
-  they're dead does damage start coming off the boss. Clearing the pool
-  advances you to the next (larger) level.
-- **The dragon** periodically attacks your castle directly regardless of
-  what you're doing, with both its damage and attack frequency scaling
-  up each level.
+- **Your dragon** fires on the horde/boss on its own fixed timer. Its
+  damage only ever goes up — every line you clear permanently adds to it,
+  which is what lets your output keep pace as levels get harder.
+- **Line clears** also permanently raise a separate damage multiplier
+  (+3% per line, forever, applies to both turrets and the dragon).
+- **Enemy pool**: each level has a total HP pool split 50/50 between the
+  mob horde and the boss. Mobs absorb damage first; only once they're
+  dead does damage start coming off the boss. Clearing the pool advances
+  you to the next (larger) level.
+- **The horde/boss** periodically strikes your castle back, with both
+  damage and frequency scaling up each level — tuned and stress-tested
+  across several simulated play paces so there's no single level where
+  you're guaranteed to die regardless of skill.
 - **Discard**: stuck with a piece you have no good spot for? Discard it
   for the next one in queue, on a 10-second cooldown.
 - **Game over** two ways: the stack reaches the top (no room left to
-  build), or the dragon whittles your castle HP to zero.
+  build), or the horde/boss whittles your castle HP to zero.
 
 ## Controls
 
@@ -91,21 +95,38 @@ npx serve .
 
 - `combat.js` is pure numeric logic with zero DOM/canvas dependencies —
   it was fully unit-tested headlessly (level scaling, HP growth, mob→boss
-  damage overflow, dragon attack cadence, HP-depletion game over) before
-  being wired into the game, and the full integration (game.js → board.js
-  → combat.js → render.js) was additionally verified end-to-end by
-  driving the real game through simulated keyboard input in a jsdom
-  environment — including forcing an actual line clear through the real
-  `lockPiece()` path and confirming the resulting damage and multiplier
-  matched the formula exactly.
+  damage overflow, dragon damage growth from clears, HP-depletion game
+  over) before being wired into the game, and the full integration
+  (game.js → board.js → combat.js → render.js) was additionally verified
+  end-to-end by driving the real game through simulated keyboard input in
+  a jsdom environment — including forcing an actual line clear through
+  the real `lockPiece()` path and confirming the resulting dragon-damage
+  growth matched the formula exactly, and confirming the spawn-blocked
+  game over fires correctly (and shows the right message) after an
+  organic, straight-down-stacking scenario.
+- The spawn-blocked game-over check was fixed by moving the piece's spawn
+  row from `-2` to `0` — at `-2`, every piece's default rotation state
+  had all of its cells landing at row `-1` or above, so the check was
+  silently comparing against rows that don't exist on the board and
+  always passing regardless of how full the top actually was. This was
+  confirmed directly: filling the entire board and checking spawn
+  validity at row `-2` returned `true` for every piece type; at row `0`
+  it correctly returned `false`.
+- The horde/boss attack numbers were deliberately retuned to be gentler
+  than a first pass, and stress-tested across five different simulated
+  play paces (fast/skilled, moderate, slow/careless, never-clearing,
+  clearing-with-few-blocks) to confirm there's no single level where
+  death is guaranteed regardless of how well you're actually playing.
 - Turret decoration is drawn only on the topmost block of each column
   (the battlements), not every single cell — this keeps the board legible
   and performant while still visually conveying "the whole wall is
-  firing."
-- The dragon, projectiles, and hit-flash are all pure canvas animation
-  driven by combat.js's callback hooks (`onEnemyDamaged`,
-  `onPlayerDamaged`, `onLevelComplete`) — render.js has no direct
-  knowledge of game rules, just visual reactions to events.
+  firing." The castle theming itself lives in the *blocks* (mortar lines,
+  a stone-blended fill, beveled masonry edges), not the frame around the
+  board, which is deliberately kept plain so it doesn't compete visually.
+- The dragon, horde, boss, projectiles, and hit-flash are all pure canvas
+  animation driven by combat.js's callback hooks (`onEnemyDamaged`,
+  `onDragonAttack`, `onPlayerDamaged`, `onLevelComplete`) — render.js has
+  no direct knowledge of game rules, just visual reactions to events.
 
 ## Ideas for extending it
 

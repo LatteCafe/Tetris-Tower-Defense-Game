@@ -72,7 +72,7 @@ TT.Game = (function () {
     TT.UI.updateNext(nextQueue[0]);
 
     const startCol = Math.floor(board.COLS / 2) - 2;
-    const spawn = { type, rotation: 0, row: -2, col: startCol };
+    const spawn = { type, rotation: 0, row: 0, col: startCol };
 
     if (!board.isValidPosition(pieces.cellsFor(type, 0), spawn.row, spawn.col)) {
       current = spawn;
@@ -170,7 +170,7 @@ TT.Game = (function () {
       lines += cleared;
       combat.onLinesCleared(cleared, cleared * board.COLS);
       TT.Render.flashClear();
-      TT.Render.spawnProjectiles(cleared * board.COLS);
+      TT.Render.dragonPowerUp();
     }
 
     current = null;
@@ -257,8 +257,9 @@ TT.Game = (function () {
     board.fillRandomStart(START_GARBAGE_ROWS);
 
     combat.init({
-      onEnemyDamaged: () => TT.Render.flashDragonHit(),
-      onPlayerDamaged: () => TT.Render.dragonAttackPulse(),
+      onEnemyDamaged: () => TT.Render.flashEnemyHit(),
+      onDragonAttack: () => TT.Render.dragonFires(),
+      onPlayerDamaged: () => TT.Render.castleUnderAttack(),
       onLevelComplete: (lvl) => TT.UI.showMilestone(`Level ${lvl}!`),
       onGameOverHP: () => gameOver('health'),
     });
