@@ -7,6 +7,7 @@ TT.Game = (function () {
   const pieces = TT.Pieces;
   const input = TT.Input;
   const combat = TT.Combat;
+  const upgrades = TT.Upgrades;
 
   const START_GARBAGE_ROWS = 5; // random pre-filled rows at the bottom on a fresh game
   const LOCK_DELAY_MS = 500; // grace period once grounded before a piece locks
@@ -16,10 +17,11 @@ TT.Game = (function () {
   const SOFT_DROP_INTERVAL_MS = 35; // effective drop speed while holding down
   const BASE_DROP_INTERVAL_MS = 800; // starting gravity speed
   const MIN_DROP_INTERVAL_MS = 90; // fastest gravity ever gets
-  const DISCARD_COOLDOWN_MS = 10000;
+  const DISCARD_COOLDOWN_BASE_MS = 10000;
+  const DISCARD_COOLDOWN_FLOOR_MS = 4000; // Quick Hands can't push it below this
 
   let canvas;
-  let state = 'ready'; // ready | playing | gameover
+  let state = 'ready'; // ready | playing | paused | gameover
   let bag = [];
   let nextQueue = [];
   let current = null; // { type, rotation, row, col }
@@ -28,6 +30,7 @@ TT.Game = (function () {
   let lockResets = 0;
   let grounded = false;
   let score = 0;
+  let gold = 0;
   let lines = 0;
   let startTime = 0;
   let elapsed = 0;
@@ -35,7 +38,6 @@ TT.Game = (function () {
   let moveHoldDir = 0;
   let moveRepeatTimer = 0;
   let discardCooldown = 0;
-  let gameOverCause = null; // 'space' | 'health'
 
   function init(canvasEl) {
     canvas = canvasEl;
@@ -47,7 +49,7 @@ TT.Game = (function () {
 
     refillQueueIfNeeded();
     TT.UI.updateNext(nextQueue[0]);
-    TT.UI.updateDiscardCooldown(0, DISCARD_COOLDOWN_MS);
+    TT.UI.updateDiscardCooldown(0, discardCooldownMs());
 
     requestAnimationFrame(loop);
   }
@@ -56,6 +58,19 @@ TT.Game = (function () {
     const parent = canvas.parentElement;
     canvas.width = parent.clientWidth;
     canvas.height = parent.clientHeight;
+  }
+
+  function discardCooldownMs() {
+    const reduction = upgrades.getEffect('quickHands') * 1000;
+    return Math.max(DISCARD_COOLDOWN_FLOOR_MS, DISCARD_COOLDOWN_BASE_MS - reduction);
+  }
+
+  // Score is a pure ever-climbing stat; gold is the spendable currency
+  // earned in parallel (boosted by the Treasure Hunter upgrade).
+  function earn(amount) {
+    score += amount;
+    const goldMult = 1 + upgrades.getEffect('goldGain');
+    gold += Math.round(amount * goldMult);
   }
 
   function refillQueueIfNeeded() {
@@ -106,9 +121,6 @@ TT.Game = (function () {
     const newRotation = current.rotation + dir;
     const cells = pieces.cellsFor(current.type, newRotation);
 
-    // Simple wall-kick attempts: straight rotation first, then nudge
-    // left/right/up by a cell or two to fit rotations near walls or the
-    // floor. Not full SRS, but robust and always grid-exact.
     const kicks = [
       { dr: 0, dc: 0 }, { dr: 0, dc: -1 }, { dr: 0, dc: 1 },
       { dr: 0, dc: -2 }, { dr: 0, dc: 2 }, { dr: -1, dc: 0 },
@@ -128,8 +140,6 @@ TT.Game = (function () {
     return false;
   }
 
-  // A successful move/rotate while grounded gives the classic "wiggle
-  // room" lock-delay reset, capped so a piece can't be stalled forever.
   function onSuccessfulAction() {
     if (grounded && lockResets < MAX_LOCK_RESETS) {
       lockTimer = 0;
@@ -145,15 +155,13 @@ TT.Game = (function () {
       current.row++;
       dropped++;
     }
-    score += dropped * 2;
+    earn(dropped * 2);
     lockPiece();
   }
 
-  // Swaps the current piece out for the next one in queue, on a cooldown
-  // — for when you're dealt something you have no good spot for.
   function discardPiece() {
     if (!current || discardCooldown > 0) return;
-    discardCooldown = DISCARD_COOLDOWN_MS;
+    discardCooldown = discardCooldownMs();
     current = null;
     spawnPiece();
   }
@@ -162,7 +170,6 @@ TT.Game = (function () {
     const cells = pieces.cellsFor(current.type, current.rotation);
     const color = pieces.colorFor(current.type);
     board.lockCells(cells, current.row, current.col, color);
-    combat.onPieceLocked(board.countFilledCells());
 
     const cleared = board.clearFullRows();
     if (cleared > 0) {
@@ -179,7 +186,7 @@ TT.Game = (function () {
 
   function applyScoreForClear(cleared) {
     const table = { 1: 100, 2: 300, 3: 500, 4: 800 };
-    score += (table[cleared] || 0) * combat.getState().level;
+    earn((table[cleared] || 0) * combat.getState().level);
   }
 
   function currentDropInterval() {
@@ -189,9 +196,19 @@ TT.Game = (function () {
   }
 
   function handleInput(delta) {
+    if (state !== 'playing') {
+      if (input.consumePressed('KeyU')) toggleUpgradesMenu();
+      return;
+    }
+
     if (discardCooldown > 0) {
       discardCooldown = Math.max(0, discardCooldown - delta);
-      TT.UI.updateDiscardCooldown(discardCooldown, DISCARD_COOLDOWN_MS);
+      TT.UI.updateDiscardCooldown(discardCooldown, discardCooldownMs());
+    }
+
+    if (input.consumePressed('KeyU')) {
+      toggleUpgradesMenu();
+      return;
     }
 
     if (!current) return;
@@ -240,21 +257,42 @@ TT.Game = (function () {
     while (dropTimer >= interval && current && !grounded) {
       dropTimer -= interval;
       current.row++;
-      if (input.isDown('ArrowDown')) score += 1;
+      if (input.isDown('ArrowDown')) earn(1);
       grounded = isGrounded(current);
     }
   }
 
   function gameOver(cause) {
     state = 'gameover';
-    gameOverCause = cause;
     const s = combat.getState();
     TT.UI.showGameOver(cause, score, lines, s.level);
+  }
+
+  // --- Upgrade menu (pauses the simulation while open) ---
+
+  function toggleUpgradesMenu() {
+    if (state === 'playing') {
+      state = 'paused';
+      TT.UI.showUpgradesMenu(gold, upgrades.list());
+    } else if (state === 'paused') {
+      state = 'playing';
+      TT.UI.hideOverlays();
+    }
+  }
+
+  function purchaseUpgrade(id) {
+    const result = upgrades.purchase(id, gold);
+    if (result.success) {
+      gold -= result.cost;
+    }
+    TT.UI.showUpgradesMenu(gold, upgrades.list());
+    return result;
   }
 
   function reset() {
     board.init();
     board.fillRandomStart(START_GARBAGE_ROWS);
+    upgrades.reset();
 
     combat.init({
       onEnemyDamaged: () => TT.Render.flashEnemyHit(),
@@ -273,6 +311,7 @@ TT.Game = (function () {
     grounded = false;
     discardCooldown = 0;
     score = 0;
+    gold = 0;
     lines = 0;
 
     spawnPiece();
@@ -295,7 +334,9 @@ TT.Game = (function () {
       combat.update(delta, board.countFilledCells());
 
       elapsed = now - startTime;
-      TT.UI.updateStats(elapsed, score, lines, combat.getState());
+      TT.UI.updateStats(elapsed, score, gold, lines, combat.getState());
+    } else if (state === 'paused') {
+      handleInput(delta); // still listen for the U key to close the menu
     }
 
     TT.Render.frame({
@@ -310,6 +351,8 @@ TT.Game = (function () {
     init,
     startGame,
     discardPiece,
+    toggleUpgradesMenu,
+    purchaseUpgrade,
     get state() { return state; },
   };
 })();

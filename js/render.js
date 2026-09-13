@@ -183,17 +183,12 @@ TT.Render = (function () {
     ctx.fillStyle = fill;
     ctx.fillRect(x + pad, y + pad, w - pad * 2, h - pad * 2);
 
-    // Beveled highlight (top-left) / shadow (bottom-right) for a
-    // masonry-block feel rather than a flat tile.
     ctx.fillStyle = 'rgba(255,255,255,0.22)';
     ctx.fillRect(x + pad, y + pad, w - pad * 2, Math.max(2, h * 0.16));
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.fillRect(x + pad, y + h - pad - Math.max(2, h * 0.14), w - pad * 2, Math.max(2, h * 0.14));
 
     if (locked) {
-      // Mortar lines on every edge, splitting the cell into a little
-      // brick pattern rather than one flat square — this is what makes
-      // locked blocks actually read as castle stonework.
       ctx.strokeStyle = 'rgba(40, 30, 20, 0.5)';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -319,7 +314,6 @@ TT.Render = (function () {
       bodyGrad.addColorStop(1, '#1c5f73');
     }
 
-    // Tail, curled behind it.
     ctx.strokeStyle = '#1c5f73';
     ctx.lineWidth = 9;
     ctx.lineCap = 'round';
@@ -329,7 +323,6 @@ TT.Render = (function () {
     ctx.quadraticCurveTo(-46, -10, -60, -6);
     ctx.stroke();
 
-    // Wings, swept back — smoother membrane shape via quadratic curves.
     const flap = Math.sin(clockMs * 0.005) * 8;
     [-1, 1].forEach((side) => {
       ctx.fillStyle = 'rgba(30, 90, 100, 0.85)';
@@ -341,7 +334,6 @@ TT.Render = (function () {
       ctx.fill();
     });
 
-    // Spine spikes.
     ctx.fillStyle = '#123a46';
     for (let i = 0; i < 4; i++) {
       const sx = -18 + i * 12;
@@ -353,18 +345,15 @@ TT.Render = (function () {
       ctx.fill();
     }
 
-    // Body.
     ctx.fillStyle = bodyGrad;
     ctx.beginPath();
     ctx.ellipse(0, 0, 34, 20, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Neck + head, facing right toward the horde.
     ctx.beginPath();
     ctx.ellipse(34, -8, 15, 10, -0.25, 0, Math.PI * 2);
     ctx.fill();
 
-    // Snout.
     ctx.beginPath();
     ctx.moveTo(44, -10);
     ctx.quadraticCurveTo(58, -8, 56, -2);
@@ -372,7 +361,6 @@ TT.Render = (function () {
     ctx.closePath();
     ctx.fill();
 
-    // Horns.
     ctx.fillStyle = '#0c2830';
     ctx.beginPath();
     ctx.moveTo(30, -18);
@@ -387,13 +375,11 @@ TT.Render = (function () {
     ctx.closePath();
     ctx.fill();
 
-    // Eye.
     ctx.fillStyle = glow > 0 ? '#3a1e00' : '#ffe36e';
     ctx.beginPath();
     ctx.arc(40, -10, 2.4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Fire breath, only while attacking.
     if (dragonAttackAnim > 0.3) {
       const fireGrad = ctx.createLinearGradient(56, -4, 90, -4);
       fireGrad.addColorStop(0, 'rgba(255,180,60,0.9)');
@@ -446,7 +432,6 @@ TT.Render = (function () {
       ctx.beginPath();
       ctx.ellipse(mx, my, 9, 8, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Two small horns.
       ctx.fillStyle = '#2e1b28';
       ctx.beginPath();
       ctx.moveTo(mx - 5, my - 6);
@@ -460,7 +445,6 @@ TT.Render = (function () {
       ctx.lineTo(mx + 5, my - 6);
       ctx.closePath();
       ctx.fill();
-      // Eyes.
       ctx.fillStyle = '#ff5a4d';
       ctx.beginPath();
       ctx.arc(mx - 3, my - 1, 1.4, 0, Math.PI * 2);
@@ -490,7 +474,6 @@ TT.Render = (function () {
     ctx.ellipse(0, 0, 26, 22, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Large curved horns.
     ctx.strokeStyle = '#150414';
     ctx.lineWidth = 5;
     ctx.lineCap = 'round';
@@ -503,14 +486,12 @@ TT.Render = (function () {
     ctx.quadraticCurveTo(26, -34, 14, -40);
     ctx.stroke();
 
-    // Glowing eyes.
     ctx.fillStyle = '#ff2a2a';
     ctx.beginPath();
     ctx.arc(-8, -4, 3, 0, Math.PI * 2);
     ctx.arc(8, -4, 3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Fading HP-based cracks/damage marks once heavily hurt.
     if (pct < 0.4) {
       ctx.strokeStyle = 'rgba(255,80,60,0.5)';
       ctx.lineWidth = 1.5;

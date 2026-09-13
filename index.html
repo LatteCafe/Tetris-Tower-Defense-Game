@@ -22,6 +22,10 @@
           <span class="label">Score</span>
           <span class="value" id="stat-score">0</span>
         </div>
+        <div class="stat-pill gold-pill">
+          <span class="label">Gold</span>
+          <span class="value" id="stat-gold">0</span>
+        </div>
         <div class="stat-pill">
           <span class="label">Lines</span>
           <span class="value" id="stat-lines">0</span>
@@ -47,7 +51,7 @@
           </div>
         </div>
         <div class="bar-row">
-          <span class="bar-label">Dragon</span>
+          <span class="bar-label">Boss</span>
           <div class="bar-track boss-track">
             <div class="bar-fill boss-fill" id="boss-bar-fill"></div>
           </div>
@@ -60,6 +64,8 @@
         <span class="label" style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);">Next</span>
         <div id="next-swatch"></div>
       </div>
+
+      <button id="btn-upgrades-open" class="upgrades-btn">⚒ Upgrades (U)</button>
 
       <button id="btn-discard" class="discard-btn" disabled>
         <span class="discard-fill" id="discard-fill"></span>
@@ -75,9 +81,9 @@
       <h1>Castle Siege</h1>
       <p>Build your castle wall by wall — every block adds an archer or
         cannon to your battlements and raises your castle's max health.
-        Clear lines to strike the horde and the dragon below; leave them
-        standing too long and they'll strike back.</p>
-      <div class="controls-hint">← → move &nbsp;·&nbsp; ↑ rotate CW &nbsp;·&nbsp; Z rotate CCW &nbsp;·&nbsp; ↓ soft drop &nbsp;·&nbsp; Space hard drop &nbsp;·&nbsp; C discard</div>
+        Your dragon fights the horde below; clearing lines makes it hit
+        harder. Spend gold on upgrades between drops to keep pace.</p>
+      <div class="controls-hint">← → move &nbsp;·&nbsp; ↑ rotate CW &nbsp;·&nbsp; Z rotate CCW &nbsp;·&nbsp; ↓ soft drop &nbsp;·&nbsp; Space hard drop &nbsp;·&nbsp; C discard &nbsp;·&nbsp; U upgrades</div>
       <button id="btn-start" class="btn">Defend the Castle</button>
     </div>
 
@@ -86,11 +92,19 @@
       <p id="gameover-stats"></p>
       <button id="btn-retry" class="btn">Try Again</button>
     </div>
+
+    <div id="screen-upgrades" class="panel upgrades-panel hidden">
+      <h2>Upgrades</h2>
+      <div class="upgrade-gold-row">Gold: <span id="upgrade-gold">0</span></div>
+      <div id="upgrade-list" class="upgrade-list"></div>
+      <button id="btn-upgrades-close" class="btn">Back to the Siege</button>
+    </div>
   </div>
 </div>
 
 <script src="js/pieces.js"></script>
 <script src="js/board.js"></script>
+<script src="js/upgrades.js"></script>
 <script src="js/combat.js"></script>
 <script src="js/input.js"></script>
 <script src="js/render.js"></script>

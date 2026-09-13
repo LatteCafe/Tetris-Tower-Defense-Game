@@ -1,7 +1,7 @@
 {
-  "name": "tetris-clone",
+  "name": "castle-siege-tetris",
   "version": "1.0.0",
-  "description": "A classic, grid-based Tetris clone. No physics engine — pure integer grid logic.",
+  "description": "A classic grid-based Tetris fused with tower defense and RPG upgrade mechanics. No physics engine — pure integer grid logic.",
   "main": "index.html",
   "scripts": {
     "start": "serve .",
@@ -10,13 +10,12 @@
   "keywords": [
     "game",
     "tetris",
+    "tower-defense",
+    "rpg",
     "canvas"
   ],
   "license": "MIT",
   "devDependencies": {
     "serve": "^14.2.1"
-  },
-  "dependencies": {
-    "jsdom": "^30.0.1"
   }
 }

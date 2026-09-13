@@ -1,9 +1,4 @@
-# Castle Siege — Tetris Tower Defense
-
-Classic grid-based Tetris 
-fused with a tower-defense layer: every block you place becomes part of
-your castle's battlements, automatically firing on the horde and dragon
-below, while they periodically strike back.
+# Castle Siege — Tetris Tower Defense + RPG Upgrades
 
 ## Gameplay
 
@@ -16,23 +11,34 @@ below, while they periodically strike back.
 - **Turrets**: the topmost block in every column sprouts an archer or
   cannon, and the whole castle passively fires on the horde/boss once a
   second, dealing damage proportional to your total block count.
+<<<<<<< HEAD
 - **Dragon** fires on the horde/boss on its own fixed timer. Its
   damage only ever goes up — every line you clear permanently adds to it,
   which is what lets your output keep pace as levels get harder.
+=======
+- **Your dragon** fires on the horde/boss on its own fixed timer. Its
+  damage only ever goes up — every line you clear permanently adds to it.
+>>>>>>> aed06e7 (upgrades system)
 - **Line clears** also permanently raise a separate damage multiplier
   (+3% per line, forever, applies to both turrets and the dragon).
 - **Enemy pool**: each level has a total HP pool split 50/50 between the
   mob horde and the boss. Mobs absorb damage first; only once they're
-  dead does damage start coming off the boss. Clearing the pool advances
-  you to the next (larger) level.
-- **The horde/boss** periodically strikes your castle back, with both
-  damage and frequency scaling up each level — tuned and stress-tested
-  across several simulated play paces so there's no single level where
-  you're guaranteed to die regardless of skill.
+  dead does damage start coming off the boss.
+- **Gold & upgrades**: every point of score also earns gold (both from
+  hard-drops and line clears). Press `U` or the Upgrades button to open
+  the shop — it pauses the game while open. Seven upgrades, each with
+  multiple levels and rising costs:
+  - **Vitality** — flat max castle HP
+  - **Regeneration** — passive HP/sec regen
+  - **Armor** — flat percentage reduction on incoming horde/boss damage
+  - **Turret Mastery** — turret damage multiplier
+  - **Dragon's Might** — dragon damage multiplier
+  - **Treasure Hunter** — more gold earned per point of score
+  - **Quick Hands** — shorter discard cooldown
 - **Discard**: stuck with a piece you have no good spot for? Discard it
-  for the next one in queue, on a 10-second cooldown.
-- **Game over** two ways: the stack reaches the top (no room left to
-  build), or the horde/boss whittles your castle HP to zero.
+  for the next one in queue, on a cooldown (shortened by Quick Hands).
+- **Game over** two ways: the stack reaches the top, or the horde/boss
+  whittles your castle HP to zero.
 
 ## Controls
 
@@ -44,22 +50,24 @@ below, while they periodically strike back.
 | `↓` | Soft drop |
 | `Space` | Hard drop |
 | `C` | Discard current piece (on cooldown) |
+| `U` | Open/close the upgrade shop (pauses the game) |
 
 ## Project structure
 
 ```
 tetris-clone/
-├── index.html          # Entry point, canvas + HUD markup
+├── index.html          # Entry point, canvas + HUD + upgrade shop markup
 ├── css/
 │   └── style.css        # Medieval castle-siege visual theme
 ├── js/
 │   ├── pieces.js         # Tetromino shapes, rotation states, 7-bag
 │   ├── board.js           # Grid state, collision checks, line clearing
-│   ├── combat.js           # HP, enemy pools, damage math, dragon AI, levels
-│   ├── input.js             # Keyboard state tracking
-│   ├── render.js             # Board, castle blocks, dragon, projectiles
-│   ├── ui.js                  # DOM overlay / HUD / HP bars wiring
-│   └── main.js                  # Bootstraps everything on load
+│   ├── upgrades.js         # RPG upgrade tree: costs, levels, effects
+│   ├── combat.js            # HP, enemy pools, damage math, dragon, levels
+│   ├── input.js               # Keyboard state tracking
+│   ├── render.js                # Board, castle blocks, dragon, projectiles
+│   ├── ui.js                     # HUD, HP bars, upgrade shop rendering
+│   └── main.js                     # Bootstraps everything on load
 ├── package.json
 └── README.md
 ```
@@ -75,38 +83,34 @@ npx serve .
 
 ## Tech notes
 
-- `combat.js` is pure numeric logic with zero DOM/canvas dependencies —
-  it was fully unit-tested headlessly (level scaling, HP growth, mob→boss
-  damage overflow, dragon damage growth from clears, HP-depletion game
-  over) before being wired into the game, and the full integration
-  (game.js → board.js → combat.js → render.js) was additionally verified
-  end-to-end by driving the real game through simulated keyboard input in
-  a jsdom environment — including forcing an actual line clear through
-  the real `lockPiece()` path and confirming the resulting dragon-damage
-  growth matched the formula exactly, and confirming the spawn-blocked
-  game over fires correctly (and shows the right message) after an
-  organic, straight-down-stacking scenario.
-- The spawn-blocked game-over check was fixed by moving the piece's spawn
-  row from `-2` to `0` — at `-2`, every piece's default rotation state
-  had all of its cells landing at row `-1` or above, so the check was
-  silently comparing against rows that don't exist on the board and
-  always passing regardless of how full the top actually was. This was
-  confirmed directly: filling the entire board and checking spawn
-  validity at row `-2` returned `true` for every piece type; at row `0`
-  it correctly returned `false`.
-- The horde/boss attack numbers were deliberately retuned to be gentler
-  than a first pass, and stress-tested across five different simulated
-  play paces (fast/skilled, moderate, slow/careless, never-clearing,
-  clearing-with-few-blocks) to confirm there's no single level where
-  death is guaranteed regardless of how well you're actually playing.
+- `upgrades.js` and `combat.js` are pure numeric logic with zero
+  DOM/canvas dependencies. Every mechanic was unit-tested headlessly
+  before being wired in: cost/level scaling and max-level cutoffs, effect
+  scaling (including a safety cap on Armor so mitigation can never exceed
+  90%), and — critically — that each upgrade's effect actually reaches
+  the number it's supposed to modify (e.g., buying one level of Armor
+  measurably reduces the very next horde attack by exactly 5%, buying
+  Turret Mastery measurably increases the very next turret tick's damage
+  by exactly 20%).
+- **A bug caught during testing, not shipped**: max HP was originally
+  only recalculated inside the piece-lock handler, so buying Vitality
+  wouldn't actually raise your HP until the next piece happened to lock.
+  Fixed by recomputing max HP every frame instead of reactively — Vitality
+  (and any future upgrade like it) now applies the instant you buy it.
+  This was caught by a test that bought an upgrade and checked the
+  resulting stat immediately afterward, before any other game event could
+  mask the bug.
+- The full purchase flow (earn gold from real hard-drops → open the
+  shop → buy → verify the effect applied and gold was deducted) and the
+  pause behavior (menu open blocks all piece control, `U` toggles
+  cleanly) were both verified end-to-end by driving the real game through
+  simulated keyboard input in a jsdom environment, not just tested as
+  isolated units.
 - Turret decoration is drawn only on the topmost block of each column
-  (the battlements), not every single cell — this keeps the board legible
-  and performant while still visually conveying "the whole wall is
-  firing." The castle theming itself lives in the *blocks* (mortar lines,
-  a stone-blended fill, beveled masonry edges), not the frame around the
-  board, which is deliberately kept plain so it doesn't compete visually.
+  (the battlements), not every single cell. The castle theming lives in
+  the *blocks* (mortar lines, stone-blended fill, beveled masonry edges),
+  not the frame around the board.
 - The dragon, horde, boss, projectiles, and hit-flash are all pure canvas
-  animation driven by combat.js's callback hooks (`onEnemyDamaged`,
-  `onDragonAttack`, `onPlayerDamaged`, `onLevelComplete`) — render.js has
-  no direct knowledge of game rules, just visual reactions to events.
+  animation driven by combat.js's callback hooks — render.js has no
+  direct knowledge of game rules, just visual reactions to events.
 
