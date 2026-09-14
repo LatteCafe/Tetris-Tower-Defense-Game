@@ -19,6 +19,7 @@ TT.Game = (function () {
   const MIN_DROP_INTERVAL_MS = 90; // fastest gravity ever gets
   const DISCARD_COOLDOWN_BASE_MS = 10000;
   const DISCARD_COOLDOWN_FLOOR_MS = 4000; // Quick Hands can't push it below this
+  const GOLD_STORAGE_KEY = 'castleSiege.gold.v1';
 
   let canvas;
   let state = 'ready'; // ready | playing | paused | gameover
@@ -30,7 +31,7 @@ TT.Game = (function () {
   let lockResets = 0;
   let grounded = false;
   let score = 0;
-  let gold = 0;
+  let gold = loadGold(); // persistent — survives death and page reloads
   let lines = 0;
   let startTime = 0;
   let elapsed = 0;
@@ -38,6 +39,24 @@ TT.Game = (function () {
   let moveHoldDir = 0;
   let moveRepeatTimer = 0;
   let discardCooldown = 0;
+
+  function loadGold() {
+    try {
+      const raw = localStorage.getItem(GOLD_STORAGE_KEY);
+      const n = raw ? parseInt(raw, 10) : 0;
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function saveGold() {
+    try {
+      localStorage.setItem(GOLD_STORAGE_KEY, String(gold));
+    } catch (e) {
+      // Storage unavailable — gold just won't persist this session.
+    }
+  }
 
   function init(canvasEl) {
     canvas = canvasEl;
@@ -65,12 +84,14 @@ TT.Game = (function () {
     return Math.max(DISCARD_COOLDOWN_FLOOR_MS, DISCARD_COOLDOWN_BASE_MS - reduction);
   }
 
-  // Score is a pure ever-climbing stat; gold is the spendable currency
-  // earned in parallel (boosted by the Treasure Hunter upgrade).
+  // Score is a pure per-run stat; gold is persistent meta-progression
+  // currency earned in parallel (boosted by the Treasure Hunter upgrade)
+  // and saved immediately so it survives death and page reloads.
   function earn(amount) {
     score += amount;
     const goldMult = 1 + upgrades.getEffect('goldGain');
     gold += Math.round(amount * goldMult);
+    saveGold();
   }
 
   function refillQueueIfNeeded() {
@@ -265,7 +286,7 @@ TT.Game = (function () {
   function gameOver(cause) {
     state = 'gameover';
     const s = combat.getState();
-    TT.UI.showGameOver(cause, score, lines, s.level);
+    TT.UI.showGameOver(cause, score, lines, s.level, gold);
   }
 
   // --- Upgrade menu (pauses the simulation while open) ---
@@ -284,15 +305,29 @@ TT.Game = (function () {
     const result = upgrades.purchase(id, gold);
     if (result.success) {
       gold -= result.cost;
+      saveGold();
     }
     TT.UI.showUpgradesMenu(gold, upgrades.list());
     return result;
   }
 
+  // Explicit, deliberate wipe of persistent progress — gated by a
+  // confirm() in the UI layer before this ever gets called, since it's
+  // irreversible.
+  function resetProgress() {
+    upgrades.hardResetProgress();
+    gold = 0;
+    saveGold();
+    TT.UI.showUpgradesMenu(gold, upgrades.list());
+  }
+
   function reset() {
     board.init();
     board.fillRandomStart(START_GARBAGE_ROWS);
-    upgrades.reset();
+    // Deliberately NOT resetting gold or upgrades here — both are
+    // persistent meta-progression that survive death and carry into the
+    // next run (and across page reloads, via localStorage). Only the
+    // in-run stats below reset.
 
     combat.init({
       onEnemyDamaged: () => TT.Render.flashEnemyHit(),
@@ -311,7 +346,6 @@ TT.Game = (function () {
     grounded = false;
     discardCooldown = 0;
     score = 0;
-    gold = 0;
     lines = 0;
 
     spawnPiece();
@@ -353,6 +387,7 @@ TT.Game = (function () {
     discardPiece,
     toggleUpgradesMenu,
     purchaseUpgrade,
+    resetProgress,
     get state() { return state; },
   };
 })();

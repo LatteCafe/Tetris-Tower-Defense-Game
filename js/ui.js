@@ -38,6 +38,10 @@ TT.UI = (function () {
     document.getElementById('btn-retry').addEventListener('click', () => TT.Game.startGame());
     document.getElementById('btn-upgrades-close').addEventListener('click', () => TT.Game.toggleUpgradesMenu());
     document.getElementById('btn-upgrades-open').addEventListener('click', () => TT.Game.toggleUpgradesMenu());
+    document.getElementById('btn-reset-progress').addEventListener('click', () => {
+      const ok = window.confirm('Reset all saved gold and upgrade levels? This cannot be undone.');
+      if (ok) TT.Game.resetProgress();
+    });
     elDiscardBtn.addEventListener('click', () => TT.Game.discardPiece());
   }
 
@@ -94,11 +98,11 @@ TT.UI = (function () {
     map[name].classList.remove('hidden');
   }
 
-  function showGameOver(cause, score, lines, level) {
+  function showGameOver(cause, score, lines, level, gold) {
     const title = cause === 'health' ? 'The Castle Has Fallen' : 'No Room Left to Build';
     document.querySelector('#screen-gameover h2').textContent = title;
     document.getElementById('gameover-stats').textContent =
-      `Score ${score} · ${lines} line${lines === 1 ? '' : 's'} · reached level ${level}`;
+      `Score ${score} · ${lines} line${lines === 1 ? '' : 's'} · reached level ${level} · ${gold} gold saved for next time`;
     showScreen('gameover');
   }
 

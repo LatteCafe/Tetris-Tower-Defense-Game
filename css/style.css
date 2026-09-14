@@ -432,6 +432,23 @@ html, body {
   animation: shake 0.3s ease;
 }
 
+.reset-progress-btn {
+  display: block;
+  margin: 10px auto 0;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.reset-progress-btn:hover {
+  opacity: 1;
+  color: var(--danger);
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-3px); }

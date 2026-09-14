@@ -70,13 +70,51 @@ TT.Upgrades = (function () {
     },
   };
 
+  const STORAGE_KEY = 'castleSiege.upgrades.v1';
+
   let levels = {};
 
+  // reset() clears in-memory levels to zero — used internally before
+  // loading a save, and available as a genuine "wipe my progress" action.
+  // It is NOT called between runs; upgrade levels are meta-progression
+  // and persist across deaths/new games by design.
   function reset() {
     levels = {};
     Object.keys(DEFS).forEach((id) => { levels[id] = 0; });
   }
-  reset();
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(levels));
+    } catch (e) {
+      // Storage unavailable (private browsing, quota, etc.) — progress
+      // just won't persist this session, not worth surfacing to the player.
+    }
+  }
+
+  function load() {
+    reset();
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      Object.keys(DEFS).forEach((id) => {
+        if (typeof saved[id] === 'number') {
+          levels[id] = Math.max(0, Math.min(saved[id], DEFS[id].maxLevel));
+        }
+      });
+    } catch (e) {
+      // Corrupt or unavailable save data — fall back to a clean reset()
+      // state, which already ran above.
+    }
+  }
+
+  load();
+
+  function hardResetProgress() {
+    reset();
+    save();
+  }
 
   function getLevel(id) {
     return levels[id] || 0;
@@ -102,6 +140,7 @@ TT.Upgrades = (function () {
     if (cost === null) return { success: false, reason: 'maxed', cost: null };
     if (gold < cost) return { success: false, reason: 'cant-afford', cost };
     levels[id]++;
+    save();
     return { success: true, cost, newLevel: levels[id] };
   }
 
@@ -115,5 +154,5 @@ TT.Upgrades = (function () {
     }));
   }
 
-  return { reset, getLevel, getCost, getEffect, purchase, list, DEFS };
+  return { reset, hardResetProgress, getLevel, getCost, getEffect, purchase, list, DEFS };
 })();
